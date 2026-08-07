@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Launch Window — Instructor Screen</title>
+<style>
+  :root{
+    --bg:#0B1020; --bg2:#131A31; --card:#182142; --line:#2A3560;
+    --ink:#EEF2FF; --dim:#95A1C8; --faint:#63709B;
+    --maroon:#8C1D40; --gold:#FFC627;
+    --low:#3DD68C; --elev:#FFC627; --serious:#FF9147; --critical:#FF5C6C;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;overflow:hidden}
+  #stage{height:100vh;display:flex;flex-direction:column;padding:2.2vh 3vw 1.6vh}
+
+  .bar{display:flex;justify-content:space-between;align-items:center;
+    padding-bottom:1.4vh;border-bottom:1px solid var(--line);flex-shrink:0}
+  .brand{font-size:1.5vh;letter-spacing:.22em;text-transform:uppercase;color:var(--faint);font-weight:800}
+  .brand b{color:var(--gold)}
+  .nav{display:flex;gap:.6vw;align-items:center}
+  .nb{background:var(--bg2);border:1px solid var(--line);color:var(--dim);
+    border-radius:.9vh;padding:.9vh 1.4vw;font-size:1.5vh;font-weight:700;cursor:pointer;font-family:inherit}
+  .nb:hover{border-color:var(--gold);color:var(--ink)}
+  .nb.on{background:var(--gold);color:#20160A;border-color:var(--gold)}
+
+  .body{flex:1;overflow-y:auto;padding:2.4vh 0 1vh;min-height:0}
+  .body::-webkit-scrollbar{width:8px} .body::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
+
+  .eyebrow{font-size:1.6vh;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);font-weight:800;margin-bottom:1.2vh}
+  h1{font-size:5.4vh;line-height:1.05;margin:0 0 2vh;letter-spacing:-.025em}
+  h2{font-size:3.6vh;line-height:1.1;margin:0 0 1.6vh;letter-spacing:-.02em}
+  p{font-size:2.5vh;line-height:1.5;margin:0 0 1.8vh;color:#DCE3FA;max-width:46ch}
+  .wide p{max-width:none}
+  .dim{color:var(--dim)}
+
+  .grid2{display:grid;grid-template-columns:1.15fr .85fr;gap:3vw;align-items:start}
+  .opts{display:flex;flex-direction:column;gap:1.4vh}
+  .o{display:flex;gap:1.4vw;align-items:flex-start;background:var(--card);
+    border:1px solid var(--line);border-radius:1.4vh;padding:1.8vh 1.6vw}
+  .ok{width:4.4vh;height:4.4vh;border-radius:1vh;background:var(--bg2);color:var(--gold);
+    font-weight:800;font-size:2.2vh;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .ol{font-size:2.4vh;font-weight:700;line-height:1.25}
+  .os{font-size:1.8vh;color:var(--dim);margin-top:.5vh}
+
+  /* timer */
+  .timer{text-align:center}
+  .tnum{font-size:16vh;font-weight:800;line-height:.9;letter-spacing:-.04em;
+    font-variant-numeric:tabular-nums}
+  .tnum.warn{color:var(--serious)} .tnum.out{color:var(--critical)}
+  .tctl{display:flex;gap:.8vw;justify-content:center;margin-top:2.2vh;flex-wrap:wrap}
+
+  /* poll */
+  .poll{display:flex;gap:1.4vw;align-items:flex-end;height:34vh;margin:2vh 0 1.4vh}
+  .col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%}
+  .colbar{width:100%;border-radius:1.2vh 1.2vh 0 0;transition:height .45s cubic-bezier(.2,.8,.2,1);
+    min-height:.6vh;display:flex;align-items:flex-start;justify-content:center;padding-top:1vh}
+  .colbar span{font-size:2.6vh;font-weight:800;color:#20160A}
+  .colA{background:var(--critical)} .colB{background:var(--elev)} .colC{background:var(--low)}
+  .collab{font-size:2vh;font-weight:800;margin-top:1.2vh;text-align:center}
+  .colsub{font-size:1.5vh;color:var(--faint);text-align:center;margin-top:.4vh;max-width:22ch;line-height:1.35}
+  .tally{display:flex;gap:1vw;justify-content:center;margin-top:1.6vh}
+  .tb{background:var(--bg2);border:1px solid var(--line);color:var(--ink);border-radius:1vh;
+    padding:1.2vh 1.8vw;font-size:2vh;font-weight:800;cursor:pointer;font-family:inherit;min-width:9vw}
+  .tb:hover{border-color:var(--gold)}
+  .tb small{display:block;font-size:1.3vh;color:var(--faint);font-weight:600;margin-top:.3vh}
+
+  /* reveal */
+  .rev{border-radius:1.6vh;padding:2.4vh 2vw;border:2px solid;margin-bottom:1.8vh}
+  .rev.major{border-color:var(--critical);background:rgba(255,92,108,.09)}
+  .rev.minor{border-color:var(--serious);background:rgba(255,145,71,.08)}
+  .rev.good{border-color:var(--low);background:rgba(61,214,140,.08)}
+  .rev .t{font-size:2.9vh;font-weight:800;margin-bottom:1vh}
+  .rev.major .t{color:var(--critical)} .rev.minor .t{color:var(--serious)} .rev.good .t{color:var(--low)}
+  .rev .b{font-size:2.1vh;line-height:1.5;color:#DCE3FA;max-width:60ch}
+
+  /* leaderboard */
+  .lbwrap{display:grid;grid-template-columns:1fr 1fr;gap:2.4vw}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font-size:1.5vh;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--faint);font-weight:800;padding:.9vh .6vw;border-bottom:1px solid var(--line)}
+  td{padding:1vh .6vw;font-size:2.1vh;border-bottom:1px solid rgba(42,53,96,.5)}
+  tr.top td{color:var(--gold);font-weight:800}
+  td.sc{text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+  .entry{display:flex;gap:.6vw;margin-bottom:1.4vh;flex-wrap:wrap}
+  .entry input{background:var(--bg2);border:1px solid var(--line);color:var(--ink);
+    border-radius:.9vh;padding:1.1vh .9vw;font-size:1.9vh;font-family:inherit;outline:none}
+  .entry input:focus{border-color:var(--gold)}
+  .entry input.nm{flex:2;min-width:9vw} .entry input.tm{flex:1.2;min-width:7vw} .entry input.sc{width:8vw}
+  .entry button{background:var(--gold);color:#20160A;border:0;border-radius:.9vh;
+    padding:1.1vh 1.6vw;font-size:1.9vh;font-weight:800;cursor:pointer;font-family:inherit}
+  .empty{color:var(--faint);font-size:2vh;padding:2vh .6vw}
+
+  .qr{display:flex;gap:3vw;align-items:center}
+  .qrbox{background:#fff;padding:2vh;border-radius:1.6vh;flex-shrink:0}
+  .qrbox img,.qrbox canvas{display:block;width:30vh;height:30vh}
+  .urlin{background:var(--bg2);border:1px solid var(--line);color:var(--gold);border-radius:.9vh;
+    padding:1.2vh .9vw;font-size:2vh;font-family:ui-monospace,Menlo,Consolas,monospace;width:100%;outline:none}
+
+  .foot{flex-shrink:0;display:flex;justify-content:space-between;align-items:center;
+    padding-top:1.2vh;border-top:1px solid var(--line);font-size:1.5vh;color:var(--faint)}
+  kbd{background:var(--bg2);border:1px solid var(--line);border-radius:.5vh;padding:.2vh .5vw;
+    font-family:inherit;font-size:1.4vh}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="bar">
+    <div class="brand"><b>Launch Window</b> &nbsp;·&nbsp; Instructor Screen</div>
+    <div class="nav" id="nav"></div>
+  </div>
+  <div class="body" id="body"></div>
+  <div class="foot">
+    <span id="hint"></span>
+    <span><kbd>←</kbd> <kbd>→</kbd> slides &nbsp;·&nbsp; <kbd>space</kbd> timer &nbsp;·&nbsp; <kbd>A</kbd><kbd>B</kbd><kbd>C</kbd> tally</span>
+  </div>
+</div>
+
+<script src="engine.js"></script>
+<script>
+(function(){
+  'use strict';
+  const G = window.LaunchWindow;
+  const body = document.getElementById('body');
+  const nav  = document.getElementById('nav');
+  const hint = document.getElementById('hint');
+  const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  // ---------- slide deck ----------
+  const slides = [];
+  slides.push({id:'welcome', label:'Start', render:renderWelcome});
+  slides.push({id:'rules',   label:'Rules', render:renderRules});
+  G.ROUNDS.forEach(R => {
+    slides.push({id:'q'+R.n,      label:R.quarter,        render:()=>renderRound(R)});
+    slides.push({id:'poll'+R.n,   label:R.quarter+' poll', render:()=>renderPoll(R), hidden:true});
+    if(R.n===4) slides.push({id:'rev4', label:'FDA',       render:()=>renderReveal('regulatory')});
+    if(R.n===6) slides.push({id:'rev6', label:'Reckoning', render:()=>renderReveal('reckoning')});
+  });
+  slides.push({id:'lb',   label:'Leaderboard', render:renderLeaderboard});
+  slides.push({id:'debr', label:'Debrief',     render:renderDebrief});
+
+  let cur = 0;
+
+  // ---------- state ----------
+  const poll = {};   // poll[roundNumber] = {A:n,B:n,C:n}
+  G.ROUNDS.forEach(R => poll[R.n] = {A:0,B:0,C:0});
+  const scores = []; // {name, team, score}
+
+  // ---------- timer ----------
+  let tRemain = 180, tRunning = false, tId = null;
+  function tick(){
+    if(tRemain > 0) tRemain--;
+    else { stopTimer(); }
+    paintTimer();
+  }
+  function startTimer(){ if(tRunning) return; tRunning = true; tId = setInterval(tick,1000); paintTimer(); }
+  function stopTimer(){ tRunning = false; clearInterval(tId); tId = null; paintTimer(); }
+  function toggleTimer(){ tRunning ? stopTimer() : startTimer(); }
+  function setTimer(sec){ stopTimer(); tRemain = sec; paintTimer(); }
+  function mmss(s){ return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+  function paintTimer(){
+    const el = document.getElementById('tnum');
+    if(!el) return;
+    el.textContent = mmss(tRemain);
+    el.className = 'tnum' + (tRemain === 0 ? ' out' : tRemain <= 30 ? ' warn' : '');
+    const b = document.getElementById('tplay');
+    if(b) b.textContent = tRunning ? 'Pause' : 'Start';
+  }
+
+  // ---------- render helpers ----------
+  function paintNav(){
+    nav.innerHTML = slides.map((s,i) =>
+      `<button class="nb ${i===cur?'on':''}" data-i="${i}">${esc(s.label)}</button>`).join('');
+    nav.querySelectorAll('[data-i]').forEach(b => b.onclick = () => go(+b.dataset.i));
+  }
+  function go(i){
+    cur = Math.max(0, Math.min(slides.length-1, i));
+    paintNav();
+    slides[cur].render();
+    paintTimer();
+  }
+
+  // ---------- slides ----------
+  function renderWelcome(){
+    hint.textContent = 'Put the game URL on screen. Students scan and enter their name and team.';
+    const url = location.href.replace(/host\.html.*$/, 'index.html');
+    body.innerHTML = `<div class="qr">
+      <div class="qrbox"><canvas id="qrc"></canvas></div>
+      <div>
+        <div class="eyebrow">ASU · Technological Entrepreneurship &amp; Management</div>
+        <h1>Launch Window</h1>
+        <p>You are about to run a health technology company for six quarters.
+        Scan the code, or type the address below.</p>
+        <input class="urlin" id="url" value="${esc(url)}">
+        <p class="dim" style="font-size:1.9vh;margin-top:1.6vh">
+        Edit the address above if you are hosting the game somewhere else — the code updates as you type.</p>
+      </div>
+    </div>`;
+    const input = document.getElementById('url');
+    const draw = () => drawQR(document.getElementById('qrc'), input.value);
+    input.oninput = draw; draw();
+  }
+
+  function renderRules(){
+    hint.textContent = 'Walk this in about 90 seconds, then send them into Q1.';
+    body.innerHTML = `<div class="wide">
+      <div class="eyebrow">How it works</div>
+      <h2>Six quarters. Ten engineering weeks each. One decision you cannot delegate.</h2>
+      <div class="grid2" style="margin-top:2.4vh">
+        <div class="opts">
+          <div class="o"><span class="ok" style="color:var(--elev)">B</span><span>
+            <span class="ol" style="color:var(--elev)">BUILD</span>
+            <span class="os">Features, marketing, scale. Grows users and revenue — and quietly grows every kind of risk.</span></span></div>
+          <div class="o"><span class="ok" style="color:#4CC9F0">V</span><span>
+            <span class="ol" style="color:#4CC9F0">VALIDATE</span>
+            <span class="os">Accuracy studies and failure testing. Lowers Safety risk.</span></span></div>
+          <div class="o"><span class="ok" style="color:#7BDFA0">P</span><span>
+            <span class="ol" style="color:#7BDFA0">PROTECT</span>
+            <span class="os">Encryption, consent design, data minimization. Lowers Data risk.</span></span></div>
+          <div class="o"><span class="ok" style="color:#C77DFF">A</span><span>
+            <span class="ol" style="color:#C77DFF">AUDIT</span>
+            <span class="os">Testing the model across skin tones, ages and body types. Lowers Fairness risk.</span></span></div>
+        </div>
+        <div>
+          <p><b style="color:var(--gold)">Your score is your company's valuation.</b>
+          Users and cash build it. Public trust multiplies it. Unresolved risk subtracts from it.</p>
+          <p>Risk is shown as a word, not a number: <b style="color:var(--low)">Low</b>,
+          <b style="color:var(--elev)">Elevated</b>, <b style="color:var(--serious)">Serious</b>,
+          <b style="color:var(--critical)">Critical</b>. Real founders don't get a precise readout either.</p>
+          <p style="color:var(--gold)"><b>Risk costs you nothing — until it costs you everything at once.</b></p>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function renderRound(R){
+    hint.textContent = `Read the scenario aloud. Give them ${R.n===1?'4':'3'} minutes, then take the poll.`;
+    body.innerHTML = `<div class="grid2">
+      <div>
+        <div class="eyebrow">${R.quarter} · Decision ${R.n} of 6</div>
+        <h2>${esc(R.title)}</h2>
+        <p style="font-size:2.35vh">${esc(R.brief)}</p>
+        <p style="font-size:2.6vh;font-weight:800;color:var(--gold)">${esc(R.question)}</p>
+        <div class="opts">
+          ${R.options.map(o=>`<div class="o"><span class="ok">${o.key}</span><span>
+            <span class="ol">${esc(o.label)}</span><span class="os">${esc(o.sub)}</span></span></div>`).join('')}
+        </div>
+      </div>
+      <div class="timer">
+        <div class="eyebrow">Time remaining</div>
+        <div class="tnum" id="tnum">3:00</div>
+        <div class="tctl">
+          <button class="nb" id="tplay">Start</button>
+          <button class="nb" id="t3">3:00</button>
+          <button class="nb" id="t2">2:00</button>
+          <button class="nb" id="t1">1:00</button>
+        </div>
+        ${R.warning ? `<p class="dim" style="font-size:1.9vh;margin-top:2.4vh;text-align:left">
+          <b style="color:var(--serious)">On their screens:</b> ${esc(R.warning)}</p>` : ''}
+      </div>
+    </div>`;
+    document.getElementById('tplay').onclick = toggleTimer;
+    document.getElementById('t3').onclick = ()=>setTimer(180);
+    document.getElementById('t2').onclick = ()=>setTimer(120);
+    document.getElementById('t1').onclick = ()=>setTimer(60);
+    paintTimer();
+  }
+
+  function renderPoll(R){
+    hint.textContent = 'Hands up for each option. Tap the buttons (or press A / B / C) to tally.';
+    const p = poll[R.n];
+    const max = Math.max(1, p.A, p.B, p.C);
+    const tot = p.A + p.B + p.C;
+    const cols = R.options.map(o => {
+      const n = p[o.key];
+      const h = (n / max) * 100;
+      return `<div class="col">
+        <div class="colbar col${o.key}" style="height:${h}%"><span>${n||''}</span></div>
+        <div class="collab">${o.key}${tot?` · ${Math.round(n/tot*100)}%`:''}</div>
+        <div class="colsub">${esc(o.label)}</div>
+      </div>`;
+    }).join('');
+    body.innerHTML = `<div class="wide">
+      <div class="eyebrow">${R.quarter} · How did the room decide?</div>
+      <h2>${esc(R.question)}</h2>
+      <div class="poll">${cols}</div>
+      <div class="tally">
+        ${R.options.map(o=>`<button class="tb" data-k="${o.key}">${o.key} +1<small>${esc(o.label.slice(0,26))}</small></button>`).join('')}
+        <button class="tb" data-reset="1" style="color:var(--faint)">Reset<small>clear this poll</small></button>
+      </div>
+    </div>`;
+    body.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { poll[R.n][b.dataset.k]++; renderPoll(R); });
+    const rs = body.querySelector('[data-reset]');
+    if(rs) rs.onclick = () => { poll[R.n] = {A:0,B:0,C:0}; renderPoll(R); };
+  }
+
+  function renderReveal(which){
+    hint.textContent = which === 'regulatory'
+      ? 'This is the turn. Let the room react before you move on.'
+      : 'Final consequences. Then go to the leaderboard.';
+    // Show all three possible outcomes so the instructor can narrate whichever applies
+    const probe = (rS,rD,rB) => {
+      const s = G.newState('x','x'); s.rSafety=rS; s.rData=rD; s.rBias=rB;
+      return G.checkpoint(s, which);
+    };
+    const sets = which === 'regulatory'
+      ? [probe(80,0,0), probe(35,0,0), probe(5,0,0)]
+      : [probe(0,80,80), probe(0,35,35), probe(0,5,5)];
+    const flat = [].concat.apply([], sets);
+    const label = which === 'regulatory' ? 'Q4 · FDA pre-submission review' : 'Q6 · The reckoning';
+    const head  = which === 'regulatory'
+      ? 'The bill for Q1 through Q4 arrives'
+      : 'Everything you were carrying quietly becomes public';
+    body.innerHTML = `<div class="wide">
+      <div class="eyebrow">${label}</div>
+      <h2>${esc(head)}</h2>
+      <p class="dim" style="font-size:2vh">Each student sees exactly one of these, depending on the risk they were carrying.</p>
+      ${flat.map(e=>`<div class="rev ${e.severity}">
+        <div class="t">${esc(e.title)}</div>
+        <div class="b">${esc(e.body)}</div>
+      </div>`).join('')}
+    </div>`;
+  }
+
+  function renderLeaderboard(){
+    hint.textContent = 'Students read out their result code. Enter name, team and score.';
+    const byScore = scores.slice().sort((a,b)=>b.score-a.score);
+    const teams = {};
+    scores.forEach(s => {
+      const t = (s.team||'—').trim() || '—';
+      teams[t] = teams[t] || {team:t, total:0, n:0};
+      teams[t].total += s.score; teams[t].n++;
+    });
+    const byTeam = Object.values(teams)
+      .map(t => ({...t, avg: Math.round(t.total/t.n)}))
+      .sort((a,b)=>b.avg-a.avg);
+
+    body.innerHTML = `<div class="wide">
+      <div class="eyebrow">Final standings</div>
+      <h2 style="margin-bottom:1.8vh">Who built the most valuable company?</h2>
+      <div class="entry">
+        <input class="nm" id="e-nm" placeholder="Name" autocomplete="off">
+        <input class="tm" id="e-tm" placeholder="Team" autocomplete="off">
+        <input class="sc" id="e-sc" placeholder="Score" inputmode="numeric" autocomplete="off">
+        <button id="e-go">Add</button>
+        <button id="e-undo" style="background:var(--bg2);color:var(--dim)">Undo</button>
+      </div>
+      <div class="lbwrap">
+        <div>
+          <table><thead><tr><th>#</th><th>Individual</th><th>Team</th><th style="text-align:right">Value</th></tr></thead>
+          <tbody>${byScore.length ? byScore.slice(0,12).map((s,i)=>
+            `<tr class="${i<3?'top':''}"><td>${i+1}</td><td>${esc(s.name)}</td><td class="dim">${esc(s.team)}</td><td class="sc">${s.score.toLocaleString()}</td></tr>`
+          ).join('') : `<tr><td colspan="4" class="empty">No scores entered yet.</td></tr>`}</tbody></table>
+        </div>
+        <div>
+          <table><thead><tr><th>#</th><th>Team</th><th>Players</th><th style="text-align:right">Avg value</th></tr></thead>
+          <tbody>${byTeam.length ? byTeam.slice(0,12).map((t,i)=>
+            `<tr class="${i<3?'top':''}"><td>${i+1}</td><td>${esc(t.team)}</td><td class="dim">${t.n}</td><td class="sc">${t.avg.toLocaleString()}</td></tr>`
+          ).join('') : `<tr><td colspan="4" class="empty">No teams yet.</td></tr>`}</tbody></table>
+        </div>
+      </div>
+    </div>`;
+
+    const nm = document.getElementById('e-nm'), tm = document.getElementById('e-tm'), sc = document.getElementById('e-sc');
+    const add = () => {
+      const v = parseInt(String(sc.value).replace(/[^\d]/g,''),10);
+      if(!nm.value.trim() || !isFinite(v)) return;
+      scores.push({name:nm.value.trim(), team:tm.value.trim()||'—', score:v});
+      const keepTeam = tm.value;
+      renderLeaderboard();
+      const n2 = document.getElementById('e-nm'), t2 = document.getElementById('e-tm');
+      t2.value = keepTeam; n2.focus();
+    };
+    document.getElementById('e-go').onclick = add;
+    document.getElementById('e-undo').onclick = () => { scores.pop(); renderLeaderboard(); };
+    [nm,tm,sc].forEach(el => el.addEventListener('keydown', e => { if(e.key==='Enter') add(); }));
+    nm.focus();
+  }
+
+  function renderDebrief(){
+    hint.textContent = 'Five to eight minutes. Let them argue.';
+    body.innerHTML = `<div class="wide">
+      <div class="eyebrow">Debrief</div>
+      <h2>What just happened?</h2>
+      <div class="grid2">
+        <div>
+          <p><b style="color:var(--gold)">1.</b> Who was winning after Q3? Where did they finish?</p>
+          <p><b style="color:var(--gold)">2.</b> Which decision do you most want back?</p>
+          <p><b style="color:var(--gold)">3.</b> The bias in the model came from the training data, not from anyone's intent.
+          Whose job was it to catch that?</p>
+          <p><b style="color:var(--gold)">4.</b> Nobody could see their exact risk numbers. Did that change how you played?
+          Real companies operate with exactly that much information.</p>
+        </div>
+        <div>
+          <p><b style="color:var(--gold)">5.</b> Was there any decision where doing the right thing was also
+          the profitable thing — just later?</p>
+          <p style="color:var(--dim);font-size:2.2vh;margin-top:3vh">
+          Every mechanic in this game is a course in the TEM major:
+          the allocation problem is <b>operations and product development</b>,
+          the risk meters are <b>innovation and risk management</b>,
+          the trust multiplier is <b>enterprise strategy</b>,
+          and the six dilemmas are <b>responsible technology development</b>.</p>
+          <p style="color:var(--gold);font-size:2.4vh;font-weight:800">
+          Four years of this. Then you do it with real money.</p>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // ---------- minimal QR encoder (byte mode, auto version, EC level M) ----------
+  function drawQR(canvas, text){
+    if(!canvas || !canvas.getContext) return;
+    const ctx = canvas.getContext('2d');
+    if(!ctx) return;
+    try{
+      const qr = buildQR(text);
+      const n = qr.size, scale = Math.max(2, Math.floor(320/n)), pad = 4*scale;
+      canvas.width = canvas.height = n*scale + pad*2;
+      ctx.fillStyle = '#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle = '#000';
+      for(let y=0;y<n;y++) for(let x=0;x<n;x++)
+        if(qr.modules[y][x]) ctx.fillRect(pad+x*scale, pad+y*scale, scale, scale);
+    }catch(e){
+      canvas.width = canvas.height = 300;
+      ctx.fillStyle='#fff'; ctx.fillRect(0,0,300,300);
+      ctx.fillStyle='#8C1D40'; ctx.font='bold 17px sans-serif'; ctx.textAlign='center';
+      ctx.fillText('Type the address below', 150, 145);
+      ctx.font='13px sans-serif'; ctx.fillStyle='#666';
+      ctx.fillText('(address too long for a code)', 150, 170);
+    }
+  }
+
+  // --- QR implementation (Reed-Solomon + matrix placement) ---
+  function buildQR(text){
+    const data = [];
+    for(let i=0;i<text.length;i++){
+      const c = text.charCodeAt(i);
+      if(c<128) data.push(c);
+      else if(c<2048){ data.push(192|c>>6, 128|c&63); }
+      else { data.push(224|c>>12, 128|(c>>6&63), 128|c&63); }
+    }
+    // capacity table for EC level M, byte mode, versions 1..10
+    const CAP=[0,14,26,42,62,84,106,122,152,180,213];
+    let ver=0; for(let v=1;v<=10;v++) if(data.length<=CAP[v]){ver=v;break;}
+    if(!ver) throw new Error('too long');
+
+    const ECC = {1:10,2:16,3:26,4:18,5:24,6:16,7:18,8:22,9:22,10:26};
+    const BLOCKS = {1:1,2:1,3:1,4:2,5:2,6:4,7:4,8:4,9:5,10:5};
+    const TOTAL = {1:26,2:44,3:70,4:100,5:134,6:172,7:196,8:242,9:292,10:346};
+
+    const size = 17 + ver*4;
+    const totalCw = TOTAL[ver];
+    const ecPerBlock = ECC[ver];
+    const nBlocks = BLOCKS[ver];
+    const dataCw = totalCw - ecPerBlock*nBlocks;
+
+    // bit stream
+    const bits = [];
+    const put = (v,len)=>{ for(let i=len-1;i>=0;i--) bits.push((v>>i)&1); };
+    put(4,4); put(data.length, ver<10?8:16);
+    data.forEach(b=>put(b,8));
+    put(0, Math.min(4, dataCw*8-bits.length));
+    while(bits.length%8) bits.push(0);
+    const cw=[]; for(let i=0;i<bits.length;i+=8){ let b=0; for(let j=0;j<8;j++) b=(b<<1)|bits[i+j]; cw.push(b); }
+    const PAD=[0xEC,0x11]; let pi=0;
+    while(cw.length<dataCw) cw.push(PAD[pi++%2]);
+
+    // GF(256)
+    const EXP=new Array(512), LOG=new Array(256);
+    for(let i=0,x=1;i<255;i++){ EXP[i]=x; LOG[x]=i; x<<=1; if(x&256) x^=0x11D; }
+    for(let i=255;i<512;i++) EXP[i]=EXP[i-255];
+    const mul=(a,b)=> (a&&b)? EXP[LOG[a]+LOG[b]] : 0;
+    function genPoly(n){ let p=[1]; for(let i=0;i<n;i++){ const q=[1,EXP[i]], r=new Array(p.length+1).fill(0);
+      for(let a=0;a<p.length;a++) for(let b=0;b<2;b++) r[a+b]^=mul(p[a],q[b]); p=r; } return p; }
+    function rs(block,n){ const g=genPoly(n); const res=block.concat(new Array(n).fill(0));
+      for(let i=0;i<block.length;i++){ const c=res[i]; if(!c) continue;
+        for(let j=0;j<g.length;j++) res[i+j]^=mul(g[j],c); }
+      return res.slice(block.length); }
+
+    // split into blocks
+    const short = Math.floor(dataCw/nBlocks), extra = dataCw%nBlocks;
+    const dblocks=[], eblocks=[]; let off=0;
+    for(let i=0;i<nBlocks;i++){
+      const len = short + (i >= nBlocks-extra ? 1 : 0);
+      const b = cw.slice(off, off+len); off+=len;
+      dblocks.push(b); eblocks.push(rs(b, ecPerBlock));
+    }
+    const out=[];
+    const maxLen = Math.max.apply(null, dblocks.map(b=>b.length));
+    for(let i=0;i<maxLen;i++) dblocks.forEach(b=>{ if(i<b.length) out.push(b[i]); });
+    for(let i=0;i<ecPerBlock;i++) eblocks.forEach(b=>out.push(b[i]));
+
+    // matrix
+    const m = Array.from({length:size},()=>new Array(size).fill(null));
+    const setF=(x,y,v)=>{ if(x>=0&&y>=0&&x<size&&y<size) m[y][x]=v; };
+    function finder(cx,cy){
+      for(let dy=-1;dy<=7;dy++) for(let dx=-1;dx<=7;dx++){
+        const on = (dx>=0&&dx<=6&&dy>=0&&dy<=6) &&
+          (dx===0||dx===6||dy===0||dy===6 || (dx>=2&&dx<=4&&dy>=2&&dy<=4));
+        setF(cx+dx, cy+dy, on?1:0);
+      }
+    }
+    finder(0,0); finder(size-7,0); finder(0,size-7);
+    for(let i=8;i<size-8;i++){ const v=(i%2===0)?1:0; m[6][i]=v; m[i][6]=v; }
+    // alignment patterns
+    const AL={1:[],2:[6,18],3:[6,22],4:[6,26],5:[6,30],6:[6,34],7:[6,22,38],8:[6,24,42],9:[6,26,46],10:[6,28,50]}[ver];
+    for(const ay of AL) for(const ax of AL){
+      if((ax<8&&ay<8)||(ax<8&&ay>size-9)||(ax>size-9&&ay<8)) continue;
+      for(let dy=-2;dy<=2;dy++) for(let dx=-2;dx<=2;dx++)
+        setF(ax+dx, ay+dy, (Math.abs(dx)===2||Math.abs(dy)===2||(dx===0&&dy===0))?1:0);
+    }
+    m[size-8][8]=1; // dark module
+    // reserve format areas
+    for(let i=0;i<9;i++){ if(m[8][i]===null)m[8][i]=0; if(m[i][8]===null)m[i][8]=0; }
+    for(let i=0;i<8;i++){ if(m[8][size-1-i]===null)m[8][size-1-i]=0; if(m[size-1-i][8]===null)m[size-1-i][8]=0; }
+
+    // place data with mask 0
+    let bi=0, dir=-1, row=size-1;
+    const bitAt=i=> (out[i>>3]>>(7-(i&7)))&1;
+    for(let col=size-1; col>0; col-=2){
+      if(col===6) col--;
+      for(;;){
+        for(let c=0;c<2;c++){
+          const x=col-c;
+          if(m[row][x]===null){
+            let v = bi < out.length*8 ? bitAt(bi++) : 0;
+            if(((row+x)%2)===0) v^=1;      // mask pattern 0
+            m[row][x]=v;
+          }
+        }
+        row+=dir;
+        if(row<0||row>=size){ row-=dir; dir=-dir; break; }
+      }
+    }
+    // format info: EC level M (00) + mask 0
+    let fmt = (0<<3)|0, d=fmt;
+    for(let i=0;i<10;i++) d = (d<<1) ^ (((d>>9)&1)*0x537);
+    const bitsF = ((fmt<<10)|d) ^ 0x5412;
+    // Placement is (x, y) in the spec; m is indexed [y][x].
+    const fbit = i => (bitsF>>i)&1;
+    for(let i=0;i<=5;i++) m[i][8]=fbit(i);
+    m[7][8]=fbit(6); m[8][8]=fbit(7); m[8][7]=fbit(8);
+    for(let i=9;i<15;i++) m[8][14-i]=fbit(i);
+    for(let i=0;i<8;i++) m[8][size-1-i]=fbit(i);
+    for(let i=8;i<15;i++) m[size-15+i][8]=fbit(i);
+
+    return {size, modules:m};
+  }
+
+  // ---------- keyboard ----------
+  document.addEventListener('keydown', e => {
+    if(/^(INPUT|TEXTAREA)$/.test(e.target.tagName)) return;
+    if(e.key==='ArrowRight'||e.key==='PageDown'){ e.preventDefault(); go(cur+1); }
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){ e.preventDefault(); go(cur-1); }
+    else if(e.key===' '){ e.preventDefault(); toggleTimer(); }
+    else if(/^[abcABC]$/.test(e.key)){
+      const s = slides[cur];
+      const mm = /^poll(\d)$/.exec(s.id);
+      if(mm){ poll[+mm[1]][e.key.toUpperCase()]++; s.render(); }
+    }
+  });
+
+  go(0);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0B1020">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Launch Window — Pulse</title>
+<style>
+  :root{
+    --bg:#0B1020; --bg2:#131A31; --card:#182142; --line:#2A3560;
+    --ink:#EEF2FF; --dim:#95A1C8; --faint:#63709B;
+    --maroon:#8C1D40; --gold:#FFC627;
+    --build:#FFC627; --validate:#4CC9F0; --protect:#7BDFA0; --audit:#C77DFF;
+    --low:#3DD68C; --elev:#FFC627; --serious:#FF9147; --critical:#FF5C6C;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;overscroll-behavior:none}
+  body{padding-bottom:env(safe-area-inset-bottom)}
+  #app{max-width:520px;margin:0 auto;min-height:100vh;display:flex;flex-direction:column}
+
+  .pad{padding:18px 18px 26px}
+  h1{font-size:26px;line-height:1.15;margin:0 0 6px;letter-spacing:-.02em}
+  h2{font-size:20px;line-height:1.2;margin:0 0 8px;letter-spacing:-.01em}
+  p{line-height:1.55;margin:0 0 14px;color:var(--ink)}
+  .muted{color:var(--dim)}
+  .tiny{font-size:12.5px;line-height:1.5;color:var(--faint)}
+  .eyebrow{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);
+    font-weight:700;margin-bottom:8px}
+
+  /* ---------- buttons ---------- */
+  .btn{display:block;width:100%;border:0;border-radius:14px;padding:17px 18px;
+    font-size:17px;font-weight:700;font-family:inherit;cursor:pointer;
+    background:var(--gold);color:#20160A;margin-top:12px;transition:transform .06s,opacity .15s}
+  .btn:active{transform:scale(.985)}
+  .btn[disabled]{opacity:.32;cursor:not-allowed}
+  .btn.ghost{background:transparent;color:var(--dim);border:1.5px solid var(--line);font-size:15px;padding:13px}
+
+  input{width:100%;padding:15px 16px;border-radius:13px;border:1.5px solid var(--line);
+    background:var(--bg2);color:var(--ink);font-size:16px;font-family:inherit;margin-bottom:12px;outline:none}
+  input:focus{border-color:var(--gold)}
+  input::placeholder{color:var(--faint)}
+  label{display:block;font-size:12.5px;color:var(--dim);margin:0 0 6px 3px;font-weight:600}
+
+  /* ---------- dashboard ---------- */
+  .dash{position:sticky;top:0;z-index:20;background:rgba(11,16,32,.94);
+    backdrop-filter:blur(14px);border-bottom:1px solid var(--line);padding:10px 14px 11px}
+  .dash-top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px}
+  .qtag{font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);font-weight:700}
+  .val{font-size:19px;font-weight:800;color:var(--gold);letter-spacing:-.02em}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:9px}
+  .stat{background:var(--bg2);border-radius:10px;padding:7px 9px}
+  .stat .k{font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);font-weight:700}
+  .stat .v{font-size:16px;font-weight:800;margin-top:2px;letter-spacing:-.02em}
+  .risks{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .risk{border-radius:10px;padding:6px 9px;border:1.5px solid}
+  .risk .k{font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;opacity:.75}
+  .risk .v{font-size:13px;font-weight:800;margin-top:1px}
+  .band-low{color:var(--low);border-color:rgba(61,214,140,.35);background:rgba(61,214,140,.09)}
+  .band-elev{color:var(--elev);border-color:rgba(255,198,39,.35);background:rgba(255,198,39,.09)}
+  .band-serious{color:var(--serious);border-color:rgba(255,145,71,.4);background:rgba(255,145,71,.1)}
+  .band-critical{color:var(--critical);border-color:rgba(255,92,108,.45);background:rgba(255,92,108,.12)}
+
+  /* ---------- allocation ---------- */
+  .weeks{text-align:center;background:var(--bg2);border:1.5px solid var(--line);
+    border-radius:14px;padding:13px;margin-bottom:14px}
+  .weeks .n{font-size:40px;font-weight:800;line-height:1;letter-spacing:-.03em}
+  .weeks.done .n{color:var(--low)}
+  .weeks .l{font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);
+    font-weight:700;margin-top:5px}
+
+  .track{background:var(--card);border-radius:14px;padding:13px 14px;margin-bottom:10px;
+    border-left:4px solid var(--tc)}
+  .track-head{display:flex;justify-content:space-between;align-items:center;gap:10px}
+  .track-name{font-size:15px;font-weight:800;color:var(--tc);letter-spacing:.02em}
+  .track-tag{font-size:11px;color:var(--faint);margin-top:1px}
+  .stepper{display:flex;align-items:center;gap:9px;flex-shrink:0}
+  .step{width:38px;height:38px;border-radius:11px;border:1.5px solid var(--line);
+    background:var(--bg2);color:var(--ink);font-size:21px;font-weight:700;line-height:1;
+    cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center}
+  .step:active{background:var(--line)}
+  .step[disabled]{opacity:.25}
+  .step-n{min-width:24px;text-align:center;font-size:20px;font-weight:800}
+  .track-desc{font-size:12.5px;color:var(--dim);line-height:1.45;margin-top:8px}
+  .bar{height:5px;border-radius:3px;background:var(--bg2);margin-top:9px;overflow:hidden}
+  .bar>i{display:block;height:100%;background:var(--tc);border-radius:3px;transition:width .2s}
+
+  /* ---------- dilemma ---------- */
+  .scenario{background:var(--card);border-radius:16px;padding:16px;margin-bottom:16px;
+    border:1px solid var(--line)}
+  .scenario p{font-size:15px;margin:0;color:#DCE3FA}
+  .warn{background:rgba(255,145,71,.1);border:1.5px solid rgba(255,145,71,.4);
+    border-radius:12px;padding:11px 13px;margin-bottom:14px;font-size:13.5px;
+    color:#FFC49B;line-height:1.45}
+  .q{font-size:17px;font-weight:800;margin:0 0 12px}
+  .opt{width:100%;text-align:left;background:var(--card);border:1.5px solid var(--line);
+    border-radius:14px;padding:15px;margin-bottom:11px;cursor:pointer;font-family:inherit;
+    color:var(--ink);display:flex;gap:12px;align-items:flex-start}
+  .opt:active{border-color:var(--gold)}
+  .opt-k{width:27px;height:27px;border-radius:8px;background:var(--bg2);color:var(--gold);
+    font-weight:800;font-size:13.5px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .opt-l{font-size:15.5px;font-weight:700;line-height:1.3}
+  .opt-s{font-size:12.5px;color:var(--dim);margin-top:4px;line-height:1.4}
+
+  /* ---------- resolve / events ---------- */
+  .deltas{display:flex;flex-wrap:wrap;gap:7px;margin:14px 0 4px}
+  .d{font-size:12px;font-weight:700;padding:5px 10px;border-radius:8px;background:var(--bg2);color:var(--dim)}
+  .d.up{color:var(--low);background:rgba(61,214,140,.11)}
+  .d.down{color:var(--critical);background:rgba(255,92,108,.11)}
+
+  .event{border-radius:16px;padding:18px;margin-bottom:14px;border:2px solid}
+  .event.major{border-color:var(--critical);background:rgba(255,92,108,.09)}
+  .event.minor{border-color:var(--serious);background:rgba(255,145,71,.08)}
+  .event.good{border-color:var(--low);background:rgba(61,214,140,.08)}
+  .event .ico{font-size:26px;line-height:1;margin-bottom:9px}
+  .event .t{font-size:16.5px;font-weight:800;letter-spacing:-.01em;margin-bottom:9px}
+  .event.major .t{color:var(--critical)} .event.minor .t{color:var(--serious)} .event.good .t{color:var(--low)}
+  .event .b{font-size:14px;line-height:1.55;color:#DCE3FA}
+  .event .les{font-size:13px;line-height:1.5;font-style:italic;color:var(--dim);
+    margin-top:12px;padding-top:11px;border-top:1px solid var(--line)}
+
+  /* ---------- final ---------- */
+  .bigscore{text-align:center;padding:22px 0 6px}
+  .bigscore .n{font-size:60px;font-weight:800;color:var(--gold);line-height:1;letter-spacing:-.035em}
+  .bigscore .l{font-size:11.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+    font-weight:700;margin-top:7px}
+  .arch{text-align:center;background:var(--card);border:1.5px solid var(--gold);border-radius:16px;
+    padding:18px;margin:16px 0}
+  .arch .t{font-size:23px;font-weight:800;color:var(--gold);letter-spacing:-.02em;margin-bottom:9px}
+  .arch .b{font-size:14px;line-height:1.55;color:#DCE3FA}
+  .brk{background:var(--card);border-radius:14px;padding:6px 15px;margin-bottom:14px}
+  .row{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .row:last-child{border:0}
+  .row b{font-weight:800}
+  .row.tot{font-size:16.5px;font-weight:800;color:var(--gold)}
+
+  .code{background:var(--bg2);border:2px dashed var(--gold);border-radius:14px;padding:15px;
+    text-align:center;margin-bottom:14px}
+  .code .c{font-size:27px;font-weight:800;letter-spacing:.12em;color:var(--gold);font-family:ui-monospace,Menlo,Consolas,monospace}
+  .code .l{font-size:11.5px;color:var(--faint);margin-top:6px;letter-spacing:.05em}
+
+  /* ---------- certificate ---------- */
+  #cert{display:none}
+  .cert{background:#fff;color:#1A1A1A;border-radius:14px;padding:34px 26px;text-align:center;
+    border:10px solid var(--maroon);margin-bottom:14px}
+  .cert .cn{font-size:10.5px;letter-spacing:.26em;text-transform:uppercase;color:var(--maroon);font-weight:800}
+  .cert .ct{font-size:26px;font-weight:800;margin:14px 0 4px;letter-spacing:-.02em}
+  .cert .cs{font-size:12.5px;color:#555;margin-bottom:22px}
+  .cert .cw{font-size:11.5px;letter-spacing:.14em;text-transform:uppercase;color:#888;font-weight:700}
+  .cert .cname{font-size:30px;font-weight:800;margin:9px 0 18px;border-bottom:2.5px solid var(--maroon);
+    display:inline-block;padding:0 20px 8px;letter-spacing:-.02em;line-height:1.2}
+  .cert .carch{font-size:19px;font-weight:800;color:var(--maroon);margin-bottom:5px}
+  .cert .cscore{font-size:14px;color:#444;margin-bottom:22px}
+  .cert .cfoot{font-size:10.5px;color:#777;line-height:1.6;border-top:1px solid #DDD;padding-top:15px}
+
+  .prog{display:flex;gap:5px;margin-bottom:15px}
+  .prog i{flex:1;height:4px;border-radius:2px;background:var(--line)}
+  .prog i.on{background:var(--gold)}
+
+  @media print{
+    body,html{background:#fff}
+    .dash,.btn,.tiny,.noprint{display:none!important}
+    #app{max-width:100%}
+    .cert{border-radius:0;page-break-inside:avoid}
+  }
+  @keyframes fade{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+  .fade{animation:fade .25s ease-out}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script src="engine.js"></script>
+<script>
+(function(){
+  'use strict';
+  const G = window.LaunchWindow;
+  const app = document.getElementById('app');
+  const SAVE = 'launchwindow.v1';
+
+  let S = null;                 // game state
+  let alloc = null;             // current round allocation
+  let lastDeltas = null;        // for the resolve screen
+  let pendingEvents = [];
+
+  // ---------- persistence (best effort; private browsing may block) ----------
+  function save(screen){
+    try{ localStorage.setItem(SAVE, JSON.stringify({S:S, screen:screen})); }catch(e){}
+  }
+  function load(){
+    try{ return JSON.parse(localStorage.getItem(SAVE)); }catch(e){ return null; }
+  }
+  function wipe(){ try{ localStorage.removeItem(SAVE); }catch(e){} }
+
+  // ---------- helpers ----------
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const fmtUsers = u => u >= 1000 ? (u/1000).toFixed(1)+'M' : Math.round(u)+'k';
+  const fmtCash  = c => (c < 0 ? '-$' : '$') + Math.abs(c).toFixed(1) + 'M';
+
+  function show(html, keepScroll){
+    app.innerHTML = html;
+    if(!keepScroll) window.scrollTo(0,0);
+  }
+
+  function dash(){
+    if(!S) return '';
+    const rows = [
+      ['Safety',   S.rSafety],
+      ['Data',     S.rData],
+      ['Fairness', S.rBias]
+    ].map(([k,v]) => {
+      const b = G.band(v);
+      return `<div class="risk ${b.cls}"><div class="k">${k}</div><div class="v">${b.label}</div></div>`;
+    }).join('');
+    const sc = G.score(S, S.round);
+    return `<div class="dash">
+      <div class="dash-top">
+        <span class="qtag">Quarter ${S.round} of 6 &nbsp;·&nbsp; Pulse</span>
+        <span class="val">${sc.total.toLocaleString()}</span>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="k">Users</div><div class="v">${fmtUsers(S.users)}</div></div>
+        <div class="stat"><div class="k">Cash</div><div class="v">${fmtCash(S.cash)}</div></div>
+        <div class="stat"><div class="k">Trust</div><div class="v">${Math.round(S.trust)}</div></div>
+      </div>
+      <div class="risks">${rows}</div>
+    </div>`;
+  }
+
+  function progress(){
+    let h = '<div class="prog">';
+    for(let i=1;i<=6;i++) h += `<i class="${i<=S.round?'on':''}"></i>`;
+    return h + '</div>';
+  }
+
+  function snapshot(){
+    return {users:S.users, cash:S.cash, trust:S.trust, rSafety:S.rSafety, rData:S.rData, rBias:S.rBias};
+  }
+  function diff(before){
+    const d = [];
+    const push = (label, now, then, invert, fmt) => {
+      const delta = now - then;
+      if(Math.abs(delta) < 0.5) return;
+      const good = invert ? delta < 0 : delta > 0;
+      const sign = delta > 0 ? '+' : '−';
+      d.push(`<span class="d ${good?'up':'down'}">${label} ${sign}${fmt?fmt(Math.abs(delta)):Math.round(Math.abs(delta))}</span>`);
+    };
+    push('Users', S.users, before.users, false);
+    push('Cash', S.cash, before.cash, false, v => '$'+v.toFixed(1)+'M');
+    push('Trust', S.trust, before.trust, false);
+    push('Safety risk', S.rSafety, before.rSafety, true);
+    push('Data risk', S.rData, before.rData, true);
+    push('Fairness risk', S.rBias, before.rBias, true);
+    return d.length ? `<div class="deltas">${d.join('')}</div>` : '';
+  }
+
+  // =================================================================
+  // SCREENS
+  // =================================================================
+
+  function screenStart(){
+    show(`<div class="pad fade" style="padding-top:52px">
+      <div class="eyebrow">ASU · Technological Entrepreneurship &amp; Management</div>
+      <h1>Launch Window</h1>
+      <p class="muted" style="font-size:15px">You are the founder and CTO of <b style="color:var(--gold)">Pulse</b>,
+      a wrist-worn health monitor with an AI that reads your heart rhythm and tells you what to do about it.</p>
+      <p class="muted" style="font-size:15px">You have six quarters to build the most valuable company in this room.
+      Every quarter you decide where your engineers spend their time, and you make one call nobody else can make for you.</p>
+      <div style="height:14px"></div>
+      <label>Your name</label>
+      <input id="nm" placeholder="First name and last initial" autocomplete="off" maxlength="28">
+      <label>Your team</label>
+      <input id="tm" placeholder="Team name or number" autocomplete="off" maxlength="20">
+      <button class="btn" id="go">Start Q1</button>
+      <p class="tiny" style="margin-top:16px">Your score is your company's valuation at the end of Q6.
+      Individual and team leaderboards are both scored.</p>
+    </div>`);
+    document.getElementById('go').onclick = () => {
+      const nm = document.getElementById('nm').value.trim();
+      const tm = document.getElementById('tm').value.trim();
+      if(!nm){ document.getElementById('nm').focus(); return; }
+      S = G.newState(nm, tm || '—');
+      screenBrief();
+    };
+  }
+
+  function screenBrief(){
+    show(`<div class="pad fade" style="padding-top:36px">
+      <div class="eyebrow">Briefing</div>
+      <h2>How Pulse is scored</h2>
+      <p style="font-size:14.5px">Every quarter you get <b>10 engineering weeks</b>. Spend them across four tracks.
+      Then you face one decision.</p>
+
+      <div class="scenario" style="padding:14px">
+        <p style="font-size:13.5px;line-height:1.6">
+        <b style="color:var(--build)">BUILD</b> grows users and revenue — and quietly grows risk.<br>
+        <b style="color:var(--validate)">VALIDATE</b> lowers safety risk.<br>
+        <b style="color:var(--protect)">PROTECT</b> lowers data and privacy risk.<br>
+        <b style="color:var(--audit)">AUDIT</b> lowers fairness and bias risk.</p>
+      </div>
+
+      <p style="font-size:14.5px">Your three risk levels are shown as words, not numbers —
+      <b style="color:var(--low)">Low</b>, <b style="color:var(--elev)">Elevated</b>,
+      <b style="color:var(--serious)">Serious</b>, <b style="color:var(--critical)">Critical</b>.
+      Real founders don't get a precise readout either.</p>
+
+      <p style="font-size:14.5px">Risk costs you nothing until it does. Then it costs you everything at once.</p>
+
+      <button class="btn" id="go">Enter Q1</button>
+      <button class="btn ghost" id="rs">Start over</button>
+    </div>`);
+    document.getElementById('go').onclick = screenAllocate;
+    document.getElementById('rs').onclick = () => { wipe(); screenStart(); };
+  }
+
+  function screenAllocate(){
+    alloc = {build:0, validate:0, protect:0, audit:0};
+    save('allocate');
+    renderAllocate();
+  }
+
+  function renderAllocate(){
+    const W = G.CONFIG.WEEKS_PER_ROUND;
+    const used = alloc.build + alloc.validate + alloc.protect + alloc.audit;
+    const left = W - used;
+    const R = G.ROUNDS[S.round - 1];
+
+    const tracks = G.TRACKS.map(t => `
+      <div class="track" style="--tc:${t.color}">
+        <div class="track-head">
+          <div>
+            <div class="track-name">${t.name}</div>
+            <div class="track-tag">${t.tag}</div>
+          </div>
+          <div class="stepper">
+            <button class="step" data-m="${t.key}" ${alloc[t.key]===0?'disabled':''}>−</button>
+            <span class="step-n">${alloc[t.key]}</span>
+            <button class="step" data-p="${t.key}" ${left===0?'disabled':''}>+</button>
+          </div>
+        </div>
+        <div class="track-desc">${t.desc}</div>
+        <div class="bar"><i style="width:${alloc[t.key]/W*100}%"></i></div>
+      </div>`).join('');
+
+    show(dash() + `<div class="pad">
+      ${progress()}
+      <div class="eyebrow">${R.quarter} · Engineering plan</div>
+      <h2>Where do your 10 weeks go?</h2>
+      <div class="weeks ${left===0?'done':''}">
+        <div class="n">${left}</div>
+        <div class="l">${left===0?'All weeks assigned':'weeks left to assign'}</div>
+      </div>
+      ${tracks}
+      <button class="btn" id="go" ${left!==0?'disabled':''}>
+        ${left===0?'Lock the plan':'Assign all 10 weeks'}
+      </button>
+    </div>`, true);
+
+    app.querySelectorAll('[data-p]').forEach(b => b.onclick = () => {
+      if(left > 0){ alloc[b.dataset.p]++; renderAllocate(); }
+    });
+    app.querySelectorAll('[data-m]').forEach(b => b.onclick = () => {
+      if(alloc[b.dataset.m] > 0){ alloc[b.dataset.m]--; renderAllocate(); }
+    });
+    const go = document.getElementById('go');
+    if(go) go.onclick = () => {
+      G.applyAllocation(S, alloc);
+      screenDilemma();
+    };
+  }
+
+  function screenDilemma(){
+    const R = G.ROUNDS[S.round - 1];
+    save('dilemma');
+    const opts = R.options.map(o => `
+      <button class="opt" data-k="${o.key}">
+        <span class="opt-k">${o.key}</span>
+        <span><span class="opt-l">${esc(o.label)}</span><span class="opt-s">${esc(o.sub)}</span></span>
+      </button>`).join('');
+
+    show(dash() + `<div class="pad fade">
+      <div class="eyebrow">${R.quarter} · Decision</div>
+      <h2>${esc(R.title)}</h2>
+      ${R.warning ? `<div class="warn"><b>Heads up.</b> ${esc(R.warning)}</div>` : ''}
+      <div class="scenario"><p>${esc(R.brief)}</p></div>
+      <div class="q">${esc(R.question)}</div>
+      ${opts}
+      <p class="tiny">There is no obviously right answer. That is the point.</p>
+    </div>`);
+
+    app.querySelectorAll('.opt').forEach(b => b.onclick = () => {
+      const o = R.options.find(x => x.key === b.dataset.k);
+      const before = snapshot();
+      G.applyChoice(S, o.fx);
+      S.choices.push({round:S.round, key:o.key});
+      lastDeltas = diff(before);
+      pendingEvents = [];
+      if(S.round === 4) pendingEvents = pendingEvents.concat(G.checkpoint(S, 'regulatory'));
+      if(S.round === 6) pendingEvents = pendingEvents.concat(G.checkpoint(S, 'reckoning'));
+      const rescue = G.checkSolvency(S);
+      if(rescue) pendingEvents.push(rescue);
+      screenResolve(o);
+    });
+  }
+
+  function screenResolve(o){
+    const R = G.ROUNDS[S.round - 1];
+    save('resolve');
+    show(dash() + `<div class="pad fade">
+      <div class="eyebrow">${R.quarter} · Outcome</div>
+      <h2>You chose ${o.key}</h2>
+      <p style="font-weight:700;color:var(--gold);font-size:14.5px">${esc(o.label)}</p>
+      <div class="scenario"><p>${esc(o.result)}</p></div>
+      ${lastDeltas}
+      <button class="btn" id="go">${pendingEvents.length ? 'Continue' : (S.round < 6 ? 'Next quarter' : 'Final results')}</button>
+    </div>`);
+    document.getElementById('go').onclick = () => {
+      if(pendingEvents.length) screenEvents();
+      else nextRound();
+    };
+  }
+
+  function screenEvents(){
+    save('events');
+    const html = pendingEvents.map(e => `
+      <div class="event ${e.severity}">
+        <div class="ico">${e.icon}</div>
+        <div class="t">${esc(e.title)}</div>
+        <div class="b">${esc(e.body)}</div>
+        <div class="les">${esc(e.lesson)}</div>
+      </div>`).join('');
+    const label = S.round === 4 ? 'Q4 · Regulatory review' : (S.round === 6 ? 'Q6 · The reckoning' : 'Company news');
+    show(dash() + `<div class="pad fade">
+      <div class="eyebrow">${label}</div>
+      <h2>${S.round === 4 ? 'The bill arrives' : 'Everything becomes public'}</h2>
+      ${html}
+      <button class="btn" id="go">${S.round < 6 ? 'Continue to Q'+(S.round+1) : 'See final results'}</button>
+    </div>`);
+    document.getElementById('go').onclick = nextRound;
+  }
+
+  function nextRound(){
+    S.history.push(snapshot());
+    if(S.round >= 6){ screenFinal(); return; }
+    S.round++;
+    screenAllocate();
+  }
+
+  function resultCode(sc){
+    const initials = (S.name.match(/\b\w/g) || ['X']).join('').slice(0,3).toUpperCase();
+    return initials + '-' + String(sc.total).padStart(4,'0');
+  }
+
+  function screenFinal(){
+    const sc = G.score(S, 6);
+    const a = G.archetype(S, sc);
+    S.finalScore = sc.total; S.finalArch = a.title;
+    save('final');
+
+    const p = sc.parts;
+    const integ = p.integrityCategories.length
+      ? p.integrityCategories.join(', ')
+      : 'none';
+
+    show(`<div class="pad fade" style="padding-top:34px">
+      <div class="eyebrow">Q6 · Final valuation</div>
+      <div class="bigscore">
+        <div class="n">${sc.total.toLocaleString()}</div>
+        <div class="l">Venture value</div>
+      </div>
+
+      <div class="arch">
+        <div class="t">${esc(a.title)}</div>
+        <div class="b">${esc(a.blurb)}</div>
+      </div>
+
+      <div class="code">
+        <div class="c">${resultCode(sc)}</div>
+        <div class="l">Read this to your instructor</div>
+      </div>
+
+      <div class="brk">
+        <div class="row"><span>Users &amp; cash you built</span><b>${p.built.toLocaleString()}</b></div>
+        <div class="row"><span>Public trust multiplier</span><b>${p.trustMult.toFixed(2)}×</b></div>
+        <div class="row"><span>Value after trust</span><b>${p.multiplied.toLocaleString()}</b></div>
+        <div class="row"><span>Unresolved risk penalty</span><b style="color:var(--critical)">${p.risk.toLocaleString()}</b></div>
+        <div class="row"><span>Integrity bonus <span class="tiny">(${esc(integ)})</span></span><b style="color:var(--low)">+${p.integrity.toLocaleString()}</b></div>
+        <div class="row tot"><span>Venture value</span><b>${sc.total.toLocaleString()}</b></div>
+      </div>
+
+      <div class="brk">
+        <div class="row"><span>Final users</span><b>${fmtUsers(S.users)}</b></div>
+        <div class="row"><span>Cash on hand</span><b>${fmtCash(S.cash)}</b></div>
+        <div class="row"><span>Public trust</span><b>${Math.round(S.trust)} / 100</b></div>
+        <div class="row"><span>Safety risk</span><b style="color:var(--${G.band(S.rSafety).cls.replace('band-','')})">${G.band(S.rSafety).label}</b></div>
+        <div class="row"><span>Data risk</span><b style="color:var(--${G.band(S.rData).cls.replace('band-','')})">${G.band(S.rData).label}</b></div>
+        <div class="row"><span>Fairness risk</span><b style="color:var(--${G.band(S.rBias).cls.replace('band-','')})">${G.band(S.rBias).label}</b></div>
+      </div>
+
+      <button class="btn" id="cert">Get my certificate</button>
+      <button class="btn ghost" id="again">Play again</button>
+      <p class="tiny" style="margin-top:16px">Curious how the other decisions would have played out?
+      That question is roughly the entire TEM curriculum.</p>
+    </div>`);
+
+    document.getElementById('cert').onclick = () => screenCert(sc, a);
+    document.getElementById('again').onclick = () => { wipe(); screenStart(); };
+  }
+
+  function screenCert(sc, a){
+    const d = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+    show(`<div class="pad fade" style="padding-top:26px">
+      <div class="cert">
+        <div class="cn">Arizona State University</div>
+        <div class="ct">Launch Window</div>
+        <div class="cs">Responsible Technology Development Simulation</div>
+        <div class="cw">This certifies that</div>
+        <div class="cname">${esc(S.name)}</div>
+        <div class="cw">completed the simulation as</div>
+        <div class="carch">${esc(a.title)}</div>
+        <div class="cscore">Final venture value ${sc.total.toLocaleString()} &nbsp;·&nbsp; Team ${esc(S.team)}</div>
+        <div class="cfoot">
+          Awarded ${d}<br>
+          Ira A. Fulton Schools of Engineering<br>
+          Technological Entrepreneurship &amp; Management
+        </div>
+      </div>
+      <button class="btn noprint" id="pr">Save or print certificate</button>
+      <button class="btn ghost noprint" id="bk">Back to results</button>
+      <p class="tiny noprint">On iPhone, tap Save or Print then choose Share to save it as a photo or PDF.</p>
+    </div>`);
+    document.getElementById('pr').onclick = () => window.print();
+    document.getElementById('bk').onclick = () => screenFinal();
+  }
+
+  // ---------- boot ----------
+  const saved = load();
+  if(saved && saved.S && saved.S.name){
+    S = saved.S;
+    const scr = saved.screen;
+    show(`<div class="pad fade" style="padding-top:70px">
+      <div class="eyebrow">Welcome back</div>
+      <h2>Resume Pulse?</h2>
+      <p class="muted">You left off in Q${S.round} as ${esc(S.name)}.</p>
+      <button class="btn" id="res">Resume Q${S.round}</button>
+      <button class="btn ghost" id="new">Start a new company</button>
+    </div>`);
+    document.getElementById('res').onclick = () => {
+      if(scr === 'final' || S.finalScore != null) screenFinal();
+      else if(scr === 'dilemma' || scr === 'resolve' || scr === 'events') screenDilemma();
+      else screenAllocate();
+    };
+    document.getElementById('new').onclick = () => { wipe(); S = null; screenStart(); };
+  } else {
+    screenStart();
+  }
+})();
+</script>
+</body>
+</html>
