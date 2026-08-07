@@ -167,23 +167,62 @@
   }
   @keyframes fade{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
   .fade{animation:fade .25s ease-out}
+
+  /* ---------- live sync ---------- */
+  .badge{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:800;
+    letter-spacing:.09em;text-transform:uppercase;padding:4px 9px;border-radius:20px;
+    border:1px solid var(--line);color:var(--faint)}
+  .badge i{width:6px;height:6px;border-radius:50%;background:currentColor;display:block}
+  .badge.live{color:var(--low);border-color:rgba(61,214,140,.4);background:rgba(61,214,140,.09)}
+  .badge.lost{color:var(--serious);border-color:rgba(255,145,71,.4);background:rgba(255,145,71,.09)}
+  .badge.solo{color:var(--faint)}
+  .dash-top .badge{margin-left:8px}
+
+  .roomin{text-transform:uppercase;letter-spacing:.22em;font-weight:800;font-size:22px;text-align:center}
+  .wait{text-align:center;padding:44px 0 10px}
+  .wait .spin{width:44px;height:44px;border-radius:50%;margin:0 auto 20px;
+    border:3px solid var(--line);border-top-color:var(--gold);animation:spin 1s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .wait .big{font-size:23px;font-weight:800;letter-spacing:-.02em;margin-bottom:8px}
+  .wait .sub{font-size:14.5px;color:var(--dim);line-height:1.5;max-width:30ch;margin:0 auto}
+  .roster{background:var(--card);border-radius:13px;padding:13px 15px;margin-top:20px;
+    font-size:13.5px;color:var(--dim);text-align:center}
+  .roster b{color:var(--gold);font-size:17px}
 </style>
 </head>
 <body>
 <div id="app"></div>
 
 <script src="engine.js"></script>
+<script src="firebase-config.js"></script>
+<script src="sync.js"></script>
 <script>
 (function(){
   'use strict';
   const G = window.LaunchWindow;
+  // If sync.js is missing or failed to load — forgotten upload, blocked CDN, bad
+  // path — fall back to an inert stub so the game still runs solo instead of
+  // white-screening. Every method is a safe no-op.
+  const Sync = window.LWSync || {
+    enabled:false, status:'off', code:null, pid:null,
+    init:async()=>false, onStatus(cb){ cb('off'); }, teardown(){},
+    joinRoom:async()=>null, roomExists:async()=>false, onRoom(){},
+    submitVote(){}, reportProgress(){},
+    createRoom:async()=>null, setOpenRound(){}, onPlayers(){}, onVotes(){}, endSession:async()=>{}
+  };
   const app = document.getElementById('app');
-  const SAVE = 'launchwindow.v1';
+  const SAVE = 'launchwindow.v2';
 
   let S = null;                 // game state
   let alloc = null;             // current round allocation
   let lastDeltas = null;        // for the resolve screen
   let pendingEvents = [];
+
+  // ---- live sync state ----
+  let live = false;             // are we in a synced room?
+  let openRound = 99;           // highest round the instructor has opened (99 = solo, no gate)
+  let waitingFor = 0;           // round we are parked waiting for, 0 = not waiting
+  let roomPlayers = 0;          // roster size, for the lobby
 
   // ---------- persistence (best effort; private browsing may block) ----------
   function save(screen){
@@ -217,7 +256,7 @@
     const sc = G.score(S, S.round);
     return `<div class="dash">
       <div class="dash-top">
-        <span class="qtag">Quarter ${S.round} of 6 &nbsp;·&nbsp; Pulse</span>
+        <span class="qtag">Quarter ${S.round} of 6 &nbsp;·&nbsp; Pulse${badge()}</span>
         <span class="val">${sc.total.toLocaleString()}</span>
       </div>
       <div class="stats">
@@ -227,6 +266,13 @@
       </div>
       <div class="risks">${rows}</div>
     </div>`;
+  }
+
+  // Honest connection badge. Never claims live when it isn't.
+  function badge(){
+    if(!live) return '';
+    if(Sync.status === 'live') return ' <span class="badge live"><i></i>Live</span>';
+    return ' <span class="badge lost"><i></i>Reconnecting</span>';
   }
 
   function progress(){
@@ -261,6 +307,14 @@
   // =================================================================
 
   function screenStart(){
+    // The QR code on the instructor screen carries ?room=CODE, so most students
+    // never type it. The field stays editable for anyone who typed the URL by hand.
+    let prefill = '';
+    try{
+      const m = /[?&]room=([A-Za-z2-9]{4})/.exec(location.search || '');
+      if(m) prefill = m[1].toUpperCase();
+    }catch(e){}
+
     show(`<div class="pad fade" style="padding-top:52px">
       <div class="eyebrow">ASU · Technological Entrepreneurship &amp; Management</div>
       <h1>Launch Window</h1>
@@ -273,17 +327,57 @@
       <input id="nm" placeholder="First name and last initial" autocomplete="off" maxlength="28">
       <label>Your team</label>
       <input id="tm" placeholder="Team name or number" autocomplete="off" maxlength="20">
-      <button class="btn" id="go">Start Q1</button>
+      ${Sync.enabled ? `
+        <label>Room code${prefill ? '' : ' <span style="color:var(--faint);font-weight:400">— on the big screen</span>'}</label>
+        <input id="rm" class="roomin" placeholder="XXXX" autocomplete="off" maxlength="4" value="${esc(prefill)}">
+      ` : ''}
+      <div id="err" class="tiny" style="color:var(--critical);margin:-4px 0 8px 3px"></div>
+      <button class="btn" id="go">${Sync.enabled ? 'Join the session' : 'Start Q1'}</button>
       <p class="tiny" style="margin-top:16px">Your score is your company's valuation at the end of Q6.
       Individual and team leaderboards are both scored.</p>
     </div>`);
-    document.getElementById('go').onclick = () => {
+
+    const err = document.getElementById('err');
+    document.getElementById('go').onclick = async () => {
       const nm = document.getElementById('nm').value.trim();
       const tm = document.getElementById('tm').value.trim();
       if(!nm){ document.getElementById('nm').focus(); return; }
+
       S = G.newState(nm, tm || '—');
+
+      if(Sync.enabled){
+        const rmEl = document.getElementById('rm');
+        const code = (rmEl.value || '').trim().toUpperCase();
+        if(code.length !== 4){ err.textContent = 'Enter the 4-letter room code from the screen.'; rmEl.focus(); return; }
+        const btn = document.getElementById('go');
+        btn.disabled = true; btn.textContent = 'Joining…';
+        const pid = await Sync.joinRoom(code, nm, tm || '—');
+        if(!pid){
+          err.textContent = 'No session found with code ' + code + '. Check the screen and try again.';
+          btn.disabled = false; btn.textContent = 'Join the session';
+          return;
+        }
+        live = true;
+        S.room = code;
+        Sync.onRoom(meta => {
+          openRound = (meta && typeof meta.openRound === 'number') ? meta.openRound : 0;
+          // If we are parked waiting and the instructor has now opened our round, go.
+          if(waitingFor && openRound >= waitingFor){ waitingFor = 0; screenAllocate(); }
+          else if(waitingFor) renderWait();
+        });
+        Sync.onStatus(() => { if(document.querySelector('.dash')) refreshBadge(); });
+        screenBrief();
+        return;
+      }
+
       screenBrief();
     };
+  }
+
+  // Repaint just the badge without re-rendering the screen underneath
+  function refreshBadge(){
+    const q = document.querySelector('.dash-top .qtag');
+    if(q && S) q.innerHTML = `Quarter ${S.round} of 6 &nbsp;·&nbsp; Pulse${badge()}`;
   }
 
   function screenBrief(){
@@ -311,8 +405,40 @@
       <button class="btn" id="go">Enter Q1</button>
       <button class="btn ghost" id="rs">Start over</button>
     </div>`);
-    document.getElementById('go').onclick = screenAllocate;
+    document.getElementById('go').onclick = gateOrAllocate;
     document.getElementById('rs').onclick = () => { wipe(); screenStart(); };
+  }
+
+  // The instructor opens each quarter from the host screen. Students may play the
+  // open quarter whenever they are ready, but cannot run ahead of the room. A student
+  // who joins late simply catches up — nobody is ever blocked by anybody else.
+  function gateOrAllocate(){
+    if(live && openRound < S.round){ waitingFor = S.round; renderWait(); return; }
+    waitingFor = 0;
+    screenAllocate();
+  }
+
+  function renderWait(){
+    save('wait');
+    const first = S.round === 1;
+    show(`<div class="pad fade">
+      <div class="wait">
+        <div class="spin"></div>
+        <div class="big">${first ? 'You’re in.' : 'Quarter ' + (S.round - 1) + ' locked in.'}</div>
+        <div class="sub">${first
+          ? 'Waiting for your instructor to open Q1. Keep this screen open.'
+          : 'Waiting for the rest of the room. Your instructor will open Q' + S.round + ' shortly.'}</div>
+        ${first ? `<div class="roster">Room <b>${esc(S.room || '')}</b></div>` : ''}
+      </div>
+      <p class="tiny" style="text-align:center;margin-top:22px">
+        ${badge().replace(/<[^>]+>/g,'').trim() === 'Reconnecting'
+          ? 'Connection dropped. You can keep playing — tap below to continue on your own.'
+          : 'Nothing to do right now.'}
+      </p>
+      ${Sync.status !== 'live' ? '<button class="btn ghost" id="solo">Continue without the room</button>' : ''}
+    </div>`);
+    const s = document.getElementById('solo');
+    if(s) s.onclick = () => { live = false; openRound = 99; waitingFor = 0; screenAllocate(); };
   }
 
   function screenAllocate(){
@@ -395,6 +521,9 @@
       const before = snapshot();
       G.applyChoice(S, o.fx);
       S.choices.push({round:S.round, key:o.key});
+      // Feeds the live histogram on the instructor screen. Fire and forget —
+      // a failed write must never interrupt the student's game.
+      if(live) Sync.submitVote(S.round, o.key);
       lastDeltas = diff(before);
       pendingEvents = [];
       if(S.round === 4) pendingEvents = pendingEvents.concat(G.checkpoint(S, 'regulatory'));
@@ -443,9 +572,10 @@
 
   function nextRound(){
     S.history.push(snapshot());
+    if(live) Sync.reportProgress(S.round, G.score(S, S.round).total, S.round >= 6);
     if(S.round >= 6){ screenFinal(); return; }
     S.round++;
-    screenAllocate();
+    gateOrAllocate();
   }
 
   function resultCode(sc){
@@ -458,6 +588,7 @@
     const a = G.archetype(S, sc);
     S.finalScore = sc.total; S.finalArch = a.title;
     save('final');
+    if(live) Sync.reportProgress(6, sc.total, true);
 
     const p = sc.parts;
     const integ = p.integrityCategories.length
@@ -478,7 +609,9 @@
 
       <div class="code">
         <div class="c">${resultCode(sc)}</div>
-        <div class="l">Read this to your instructor</div>
+        <div class="l">${live && Sync.status === 'live'
+          ? 'Already on the leaderboard — this is your backup code'
+          : 'Read this to your instructor'}</div>
       </div>
 
       <div class="brk">
@@ -536,6 +669,21 @@
   }
 
   // ---------- boot ----------
+  async function boot(){
+    // Try to bring up live sync, but never let it hold the game hostage.
+    // If Firebase is slow, blocked, or misconfigured, we fall through to solo mode.
+    show(`<div class="pad"><div class="wait" style="padding-top:90px">
+      <div class="spin"></div><div class="sub">Starting up…</div></div></div>`);
+    try{
+      await Promise.race([
+        Sync.init(),
+        new Promise(res => setTimeout(res, 6000))   // hard ceiling; do not strand a student
+      ]);
+    }catch(e){}
+    startOrResume();
+  }
+
+  function startOrResume(){
   const saved = load();
   if(saved && saved.S && saved.S.name){
     S = saved.S;
@@ -548,6 +696,9 @@
       <button class="btn ghost" id="new">Start a new company</button>
     </div>`);
     document.getElementById('res').onclick = () => {
+      // A resumed game is no longer attached to a room — the player id is gone.
+      // Let them finish solo rather than pretend they are still synced.
+      live = false; openRound = 99;
       if(scr === 'final' || S.finalScore != null) screenFinal();
       else if(scr === 'dilemma' || scr === 'resolve' || scr === 'events') screenDilemma();
       else screenAllocate();
@@ -556,6 +707,9 @@
   } else {
     screenStart();
   }
+  }
+
+  boot();
 })();
 </script>
 </body>

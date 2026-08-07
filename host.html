@@ -17,15 +17,28 @@
     -webkit-font-smoothing:antialiased;overflow:hidden}
   #stage{height:100vh;display:flex;flex-direction:column;padding:2.2vh 3vw 1.6vh}
 
-  .bar{display:flex;justify-content:space-between;align-items:center;
-    padding-bottom:1.4vh;border-bottom:1px solid var(--line);flex-shrink:0}
+  /* Header: brand row on top, tab strip below. The strip WRAPS — with 18 slides a
+     single row overflows the screen and clips the last tabs. */
+  .bar{display:flex;flex-direction:column;gap:1vh;
+    padding-bottom:1.1vh;border-bottom:1px solid var(--line);flex-shrink:0}
+  .barrow{display:flex;justify-content:space-between;align-items:center;gap:1.5vw}
   .brand{font-size:1.5vh;letter-spacing:.22em;text-transform:uppercase;color:var(--faint);font-weight:800}
   .brand b{color:var(--gold)}
-  .nav{display:flex;gap:.6vw;align-items:center}
+  .nav{display:flex;gap:.45vw;align-items:center;flex-wrap:wrap;row-gap:.7vh}
   .nb{background:var(--bg2);border:1px solid var(--line);color:var(--dim);
-    border-radius:.9vh;padding:.9vh 1.4vw;font-size:1.5vh;font-weight:700;cursor:pointer;font-family:inherit}
+    border-radius:.8vh;padding:.7vh 1vw;font-size:1.4vh;font-weight:700;cursor:pointer;
+    font-family:inherit;white-space:nowrap;flex-shrink:0}
   .nb:hover{border-color:var(--gold);color:var(--ink)}
   .nb.on{background:var(--gold);color:#20160A;border-color:var(--gold)}
+  /* Prev / next / position — for driving the deck with a mouse */
+  .pager{display:flex;align-items:center;gap:.7vw;flex-shrink:0}
+  .pager button{background:var(--bg2);border:1px solid var(--line);color:var(--ink);
+    border-radius:.8vh;width:4.2vh;height:4.2vh;font-size:1.9vh;cursor:pointer;
+    font-family:inherit;line-height:1;display:flex;align-items:center;justify-content:center}
+  .pager button:hover{border-color:var(--gold)}
+  .pager button[disabled]{opacity:.28;cursor:default}
+  .pos{font-size:1.5vh;color:var(--faint);font-weight:800;min-width:5.5vw;text-align:center;
+    font-variant-numeric:tabular-nums}
 
   .body{flex:1;overflow-y:auto;padding:2.4vh 0 1vh;min-height:0}
   .body::-webkit-scrollbar{width:8px} .body::-webkit-scrollbar-thumb{background:var(--line);border-radius:4px}
@@ -104,12 +117,42 @@
     padding-top:1.2vh;border-top:1px solid var(--line);font-size:1.5vh;color:var(--faint)}
   kbd{background:var(--bg2);border:1px solid var(--line);border-radius:.5vh;padding:.2vh .5vw;
     font-family:inherit;font-size:1.4vh}
+
+  /* ---------- live sync ---------- */
+  .badge{display:inline-flex;align-items:center;gap:.5vw;font-size:1.3vh;font-weight:800;
+    letter-spacing:.1em;text-transform:uppercase;padding:.5vh .9vw;border-radius:3vh;
+    border:1px solid var(--line);color:var(--faint)}
+  .badge i{width:.9vh;height:.9vh;border-radius:50%;background:currentColor}
+  .badge.live{color:var(--low);border-color:rgba(61,214,140,.4);background:rgba(61,214,140,.09)}
+  .badge.lost{color:var(--serious);border-color:rgba(255,145,71,.4);background:rgba(255,145,71,.1)}
+
+  .roomcode{font-size:11vh;font-weight:800;letter-spacing:.14em;color:var(--gold);line-height:1;
+    font-family:ui-monospace,Menlo,Consolas,monospace}
+  .roomlab{font-size:1.6vh;letter-spacing:.2em;text-transform:uppercase;color:var(--faint);
+    font-weight:800;margin-top:1.2vh}
+
+  .openbtn{background:var(--gold);color:#20160A;border:0;border-radius:1.1vh;
+    padding:1.6vh 2.2vw;font-size:2.2vh;font-weight:800;cursor:pointer;font-family:inherit;width:100%}
+  .openbtn:hover{filter:brightness(1.06)}
+  .openbtn.done{background:var(--bg2);color:var(--low);border:1px solid rgba(61,214,140,.4);cursor:default}
+  .lockcount{font-size:2vh;color:var(--dim);text-align:center;margin-top:1.4vh}
+  .lockcount b{color:var(--gold);font-size:2.8vh;font-variant-numeric:tabular-nums}
+  .lockbar{height:.9vh;border-radius:.5vh;background:var(--bg2);margin-top:1.2vh;overflow:hidden}
+  .lockbar>i{display:block;height:100%;background:var(--low);transition:width .5s}
+  .srcnote{font-size:1.4vh;color:var(--faint);text-align:center;margin-top:1.2vh}
 </style>
 </head>
 <body>
 <div id="stage">
   <div class="bar">
-    <div class="brand"><b>Launch Window</b> &nbsp;·&nbsp; Instructor Screen</div>
+    <div class="barrow">
+      <div class="brand"><b>Launch Window</b> &nbsp;·&nbsp; Instructor Screen</div>
+      <div class="pager">
+        <button id="prev" title="Previous slide">&#9664;</button>
+        <span class="pos" id="pos"></span>
+        <button id="next" title="Next slide">&#9654;</button>
+      </div>
+    </div>
     <div class="nav" id="nav"></div>
   </div>
   <div class="body" id="body"></div>
@@ -120,10 +163,18 @@
 </div>
 
 <script src="engine.js"></script>
+<script src="firebase-config.js"></script>
+<script src="sync.js"></script>
 <script>
 (function(){
   'use strict';
   const G = window.LaunchWindow;
+  // Inert stub if sync.js is missing — the deck must never fail to open in class.
+  const Sync = window.LWSync || {
+    enabled:false, status:'off', code:null,
+    init:async()=>false, onStatus(cb){ cb('off'); }, teardown(){},
+    createRoom:async()=>null, setOpenRound(){}, onPlayers(){}, onVotes(){}, endSession:async()=>{}
+  };
   const body = document.getElementById('body');
   const nav  = document.getElementById('nav');
   const hint = document.getElementById('hint');
@@ -145,9 +196,62 @@
   let cur = 0;
 
   // ---------- state ----------
-  const poll = {};   // poll[roundNumber] = {A:n,B:n,C:n}
+  const poll = {};   // MANUAL tallies — hands up. poll[round] = {A,B,C}
   G.ROUNDS.forEach(R => poll[R.n] = {A:0,B:0,C:0});
-  const scores = []; // {name, team, score}
+  const scores = []; // MANUALLY entered scores {name, team, score}
+
+  // ---------- live state ----------
+  let room = null;                 // room code, null when not live
+  let players = [];                // live roster from Firebase
+  const liveVotes = {};            // liveVotes[round] = {A,B,C}
+  G.ROUNDS.forEach(R => liveVotes[R.n] = {A:0,B:0,C:0});
+  let openRound = 0;               // highest quarter released to students
+
+  // Displayed counts are live votes PLUS manual tallies, so a student whose phone
+  // failed can still be counted with a hand raise.
+  function combinedPoll(n){
+    const l = liveVotes[n] || {A:0,B:0,C:0}, m = poll[n];
+    return {A:l.A+m.A, B:l.B+m.B, C:l.C+m.C};
+  }
+
+  // Same idea for the leaderboard: live players merged with hand-typed entries.
+  function combinedScores(){
+    const live = players.filter(p => p.score > 0)
+      .map(p => ({name:p.name, team:p.team || '—', score:p.score, done:!!p.done, src:'live'}));
+    return live.concat(scores.map(s => Object.assign({src:'manual', done:true}, s)));
+  }
+
+  function liveBadge(){
+    if(!Sync.enabled) return '';
+    if(Sync.status === 'live') return `<span class="badge live"><i></i>Live · ${players.length} joined</span>`;
+    return '<span class="badge lost"><i></i>Reconnecting</span>';
+  }
+
+  // Re-render the current slide when live data changes, but only if it shows any.
+  function refreshIfLiveSlide(){
+    const id = slides[cur] && slides[cur].id;
+    if(/^(poll\d|lb|welcome|q\d)$/.test(id)) slides[cur].render();
+    const p = document.getElementById('livebadge');
+    if(p) p.innerHTML = liveBadge();
+  }
+
+  async function startLive(){
+    if(!Sync.enabled) return;
+    room = await Sync.createRoom();
+    if(!room) return;
+    Sync.onPlayers(list => { players = list; refreshIfLiveSlide(); });
+    G.ROUNDS.forEach(R => Sync.onVotes(R.n, tally => {
+      liveVotes[R.n] = tally; refreshIfLiveSlide();
+    }));
+    Sync.onStatus(() => refreshIfLiveSlide());
+    refreshIfLiveSlide();
+  }
+
+  async function openQuarter(n){
+    openRound = Math.max(openRound, n);
+    await Sync.setOpenRound(openRound);
+    refreshIfLiveSlide();
+  }
 
   // ---------- timer ----------
   let tRemain = 180, tRunning = false, tId = null;
@@ -175,6 +279,11 @@
     nav.innerHTML = slides.map((s,i) =>
       `<button class="nb ${i===cur?'on':''}" data-i="${i}">${esc(s.label)}</button>`).join('');
     nav.querySelectorAll('[data-i]').forEach(b => b.onclick = () => go(+b.dataset.i));
+    const pos = document.getElementById('pos');
+    if(pos) pos.textContent = (cur+1) + ' / ' + slides.length;
+    const p = document.getElementById('prev'), n = document.getElementById('next');
+    if(p) p.disabled = cur === 0;
+    if(n) n.disabled = cur === slides.length - 1;
   }
   function go(i){
     cur = Math.max(0, Math.min(slides.length-1, i));
@@ -186,17 +295,30 @@
   // ---------- slides ----------
   function renderWelcome(){
     hint.textContent = 'Put the game URL on screen. Students scan and enter their name and team.';
-    const url = location.href.replace(/host\.html.*$/, 'index.html');
+    let url = location.href.replace(/host\.html.*$/, 'index.html');
+    if(room) url += '?room=' + room;   // students never have to type the code
+
     body.innerHTML = `<div class="qr">
       <div class="qrbox"><canvas id="qrc"></canvas></div>
       <div>
         <div class="eyebrow">ASU · Technological Entrepreneurship &amp; Management</div>
         <h1>Launch Window</h1>
-        <p>You are about to run a health technology company for six quarters.
-        Scan the code, or type the address below.</p>
+        ${room ? `
+          <div class="roomcode">${esc(room)}</div>
+          <div class="roomlab">Room code &nbsp;·&nbsp; <span id="livebadge">${liveBadge()}</span></div>
+          <p style="margin-top:2vh">Scan the code, or go to the address below and enter <b style="color:var(--gold)">${esc(room)}</b>.</p>
+        ` : `
+          <p>You are about to run a health technology company for six quarters.
+          Scan the code, or type the address below.</p>
+          ${Sync.enabled === false && window.LW_FIREBASE && String(window.LW_FIREBASE.apiKey).indexOf('PASTE_YOUR') === -1
+            ? `<p style="color:var(--serious);font-size:1.9vh">Live sync did not connect — running in manual mode.
+               Scores and polls will need to be entered by hand. This is fine; the game is unaffected.</p>`
+            : `<p class="dim" style="font-size:1.9vh">Running in manual mode. To turn on live sync,
+               fill in <b>firebase-config.js</b> — see FIREBASE SETUP.md.</p>`}
+        `}
         <input class="urlin" id="url" value="${esc(url)}">
-        <p class="dim" style="font-size:1.9vh;margin-top:1.6vh">
-        Edit the address above if you are hosting the game somewhere else — the code updates as you type.</p>
+        <p class="dim" style="font-size:1.8vh;margin-top:1.4vh">
+        Edit the address if you host the game elsewhere — the QR code updates as you type.</p>
       </div>
     </div>`;
     const input = document.getElementById('url');
@@ -236,6 +358,24 @@
     </div>`;
   }
 
+  // "Open Q3" releases the quarter to every phone at once. Until you press it,
+  // students who finished Q2 sit on a waiting screen — which is what keeps the
+  // room together for the Q4 reveal.
+  function renderOpenControl(R){
+    const isOpen = openRound >= R.n;
+    const locked = players.filter(p => p.round >= R.n).length;
+    const total  = players.length;
+    const pct    = total ? Math.round(locked / total * 100) : 0;
+    return `
+      <div class="eyebrow">Round control &nbsp;·&nbsp; <span id="livebadge">${liveBadge()}</span></div>
+      <button class="openbtn ${isOpen ? 'done' : ''}" id="${isOpen ? '' : 'openq'}">
+        ${isOpen ? '✓ ' + R.quarter + ' is open' : 'Open ' + R.quarter + ' to all phones'}
+      </button>
+      ${isOpen ? `
+        <div class="lockcount"><b>${locked}</b> of ${total} have locked in ${R.quarter}</div>
+        <div class="lockbar"><i style="width:${pct}%"></i></div>` : ''}`;
+  }
+
   function renderRound(R){
     hint.textContent = `Read the scenario aloud. Give them ${R.n===1?'4':'3'} minutes, then take the poll.`;
     body.innerHTML = `<div class="grid2">
@@ -250,7 +390,8 @@
         </div>
       </div>
       <div class="timer">
-        <div class="eyebrow">Time remaining</div>
+        ${room ? renderOpenControl(R) : ''}
+        <div class="eyebrow" style="margin-top:${room?'2.4vh':'0'}">Time remaining</div>
         <div class="tnum" id="tnum">3:00</div>
         <div class="tctl">
           <button class="nb" id="tplay">Start</button>
@@ -262,6 +403,8 @@
           <b style="color:var(--serious)">On their screens:</b> ${esc(R.warning)}</p>` : ''}
       </div>
     </div>`;
+    const ob = document.getElementById('openq');
+    if(ob) ob.onclick = () => openQuarter(R.n);
     document.getElementById('tplay').onclick = toggleTimer;
     document.getElementById('t3').onclick = ()=>setTimer(180);
     document.getElementById('t2').onclick = ()=>setTimer(120);
@@ -270,8 +413,10 @@
   }
 
   function renderPoll(R){
-    hint.textContent = 'Hands up for each option. Tap the buttons (or press A / B / C) to tally.';
-    const p = poll[R.n];
+    hint.textContent = room
+      ? 'Votes arrive automatically as students choose. A / B / C adds a manual vote if someone’s phone failed.'
+      : 'Hands up for each option. Tap the buttons (or press A / B / C) to tally.';
+    const p = combinedPoll(R.n);
     const max = Math.max(1, p.A, p.B, p.C);
     const tot = p.A + p.B + p.C;
     const cols = R.options.map(o => {
@@ -283,14 +428,18 @@
         <div class="colsub">${esc(o.label)}</div>
       </div>`;
     }).join('');
+    const lv = liveVotes[R.n] || {A:0,B:0,C:0};
+    const liveTot = lv.A + lv.B + lv.C;
+    const manTot = poll[R.n].A + poll[R.n].B + poll[R.n].C;
     body.innerHTML = `<div class="wide">
-      <div class="eyebrow">${R.quarter} · How did the room decide?</div>
+      <div class="eyebrow">${R.quarter} · How did the room decide? ${room ? '&nbsp;·&nbsp; <span id="livebadge">'+liveBadge()+'</span>' : ''}</div>
       <h2>${esc(R.question)}</h2>
       <div class="poll">${cols}</div>
       <div class="tally">
         ${R.options.map(o=>`<button class="tb" data-k="${o.key}">${o.key} +1<small>${esc(o.label.slice(0,26))}</small></button>`).join('')}
-        <button class="tb" data-reset="1" style="color:var(--faint)">Reset<small>clear this poll</small></button>
+        <button class="tb" data-reset="1" style="color:var(--faint)">Reset<small>clear manual votes</small></button>
       </div>
+      ${room ? `<div class="srcnote">${liveTot} from phones${manTot ? ' · ' + manTot + ' added by hand' : ''}</div>` : ''}
     </div>`;
     body.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { poll[R.n][b.dataset.k]++; renderPoll(R); });
     const rs = body.querySelector('[data-reset]');
@@ -326,10 +475,13 @@
   }
 
   function renderLeaderboard(){
-    hint.textContent = 'Students read out their result code. Enter name, team and score.';
-    const byScore = scores.slice().sort((a,b)=>b.score-a.score);
+    hint.textContent = room
+      ? 'Scores appear as students finish. Use the boxes only for anyone whose phone dropped out.'
+      : 'Students read out their result code. Enter name, team and score.';
+    const all = combinedScores();
+    const byScore = all.slice().sort((a,b)=>b.score-a.score);
     const teams = {};
-    scores.forEach(s => {
+    all.forEach(s => {
       const t = (s.team||'—').trim() || '—';
       teams[t] = teams[t] || {team:t, total:0, n:0};
       teams[t].total += s.score; teams[t].n++;
@@ -339,8 +491,10 @@
       .sort((a,b)=>b.avg-a.avg);
 
     body.innerHTML = `<div class="wide">
-      <div class="eyebrow">Final standings</div>
-      <h2 style="margin-bottom:1.8vh">Who built the most valuable company?</h2>
+      <div class="eyebrow">Final standings ${room ? '&nbsp;·&nbsp; <span id="livebadge">'+liveBadge()+'</span>' : ''}</div>
+      <h2 style="margin-bottom:1.8vh">Who built the most valuable company?
+        ${room ? `<span style="color:var(--faint);font-size:2.2vh;font-weight:600">
+          &nbsp;${all.filter(s=>s.done).length} finished</span>` : ''}</h2>
       <div class="entry">
         <input class="nm" id="e-nm" placeholder="Name" autocomplete="off">
         <input class="tm" id="e-tm" placeholder="Team" autocomplete="off">
@@ -405,9 +559,22 @@
           and the six dilemmas are <b>responsible technology development</b>.</p>
           <p style="color:var(--gold);font-size:2.4vh;font-weight:800">
           Four years of this. Then you do it with real money.</p>
+          ${room ? `<div style="margin-top:3vh">
+            <button class="nb" id="endsess" style="border-color:var(--critical);color:var(--critical)">
+              End session &amp; delete room ${esc(room)}</button>
+            <p class="dim" style="font-size:1.6vh;margin-top:1vh">
+            Removes every student record from the database. Do this once certificates are saved.</p>
+          </div>` : ''}
         </div>
       </div>
     </div>`;
+    const es = document.getElementById('endsess');
+    if(es) es.onclick = async () => {
+      if(!confirm('Delete room ' + room + ' and all student records? Certificates already saved on phones are unaffected.')) return;
+      await Sync.endSession();
+      room = null; players = []; openRound = 0;
+      renderDebrief();
+    };
   }
 
   // ---------- minimal QR encoder (byte mode, auto version, EC level M) ----------
@@ -563,7 +730,22 @@
     }
   });
 
-  go(0);
+  document.getElementById('prev').onclick = () => go(cur-1);
+  document.getElementById('next').onclick = () => go(cur+1);
+
+  // ---------- boot ----------
+  (async function(){
+    go(0);                                  // draw immediately; never wait on the network
+    if(!window.LWSync) return;
+    try{
+      const ok = await Promise.race([
+        Sync.init(),
+        new Promise(res => setTimeout(() => res(false), 8000))
+      ]);
+      if(ok) await startLive();
+    }catch(e){ console.warn('live sync unavailable', e); }
+    if(slides[cur].id === 'welcome') renderWelcome();   // repaint with the room code
+  })();
 })();
 </script>
 </body>
