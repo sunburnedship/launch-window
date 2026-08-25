@@ -37,6 +37,10 @@
   .btn:active{transform:scale(.985)}
   .btn[disabled]{opacity:.32;cursor:not-allowed}
   .btn.ghost{background:transparent;color:var(--dim);border:1.5px solid var(--line);font-size:15px;padding:13px}
+  /* ASU maroon call-to-action. Used as an <a>, so it needs the text reset that
+     a <button> gets for free. */
+  .btn.asu{background:var(--maroon);color:#fff;text-decoration:none;text-align:center}
+  .btn.asu:visited{color:#fff}
 
   input{width:100%;padding:15px 16px;border-radius:13px;border:1.5px solid var(--line);
     background:var(--bg2);color:var(--ink);font-size:16px;font-family:inherit;margin-bottom:12px;outline:none}
@@ -142,7 +146,6 @@
   .code .l{font-size:11.5px;color:var(--faint);margin-top:6px;letter-spacing:.05em}
 
   /* ---------- certificate ---------- */
-  #cert{display:none}
   .cert{background:#fff;color:#1A1A1A;border-radius:14px;padding:34px 26px;text-align:center;
     border:10px solid var(--maroon);margin-bottom:14px}
   .cert .cn{font-size:10.5px;letter-spacing:.26em;text-transform:uppercase;color:var(--maroon);font-weight:800}
@@ -212,6 +215,13 @@
   };
   const app = document.getElementById('app');
   const SAVE = 'launchwindow.v2';
+
+  // Where "Explore the TEM program" sends a student. Outbound link only — nothing
+  // about the student is collected, sent, or stored. Opens in a new tab so the
+  // game and certificate stay behind it.
+  const TEM_URL = 'https://poly.engineering.asu.edu/degrees/technological-entrepreneurship-and-management/';
+  const temButton = (cls) =>
+    `<a class="btn asu ${cls || ''}" href="${TEM_URL}" target="_blank" rel="noopener noreferrer">Explore the TEM program</a>`;
 
   let S = null;                 // game state
   let alloc = null;             // current round allocation
@@ -633,6 +643,7 @@
       </div>
 
       <button class="btn" id="cert">Get my certificate</button>
+      ${temButton()}
       <button class="btn ghost" id="again">Play again</button>
       <p class="tiny" style="margin-top:16px">Curious how the other decisions would have played out?
       That question is roughly the entire TEM curriculum.</p>
@@ -661,6 +672,7 @@
         </div>
       </div>
       <button class="btn noprint" id="pr">Save or print certificate</button>
+      ${temButton('noprint')}
       <button class="btn ghost noprint" id="bk">Back to results</button>
       <p class="tiny noprint">On iPhone, tap Save or Print then choose Share to save it as a photo or PDF.</p>
     </div>`);
