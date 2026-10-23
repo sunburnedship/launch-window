@@ -8,7 +8,7 @@
   :root{
     --bg:#0B1020; --bg2:#131A31; --card:#182142; --line:#2A3560;
     --ink:#EEF2FF; --dim:#95A1C8; --faint:#63709B;
-    --maroon:#8C1D40; --gold:#FFC627;
+    --maroon:#8C1D40; --maroon-lt:#B8285A; --gold:#FFC627;
     --low:#3DD68C; --elev:#FFC627; --serious:#FF9147; --critical:#FF5C6C;
   }
   *{box-sizing:border-box}
@@ -17,19 +17,26 @@
     -webkit-font-smoothing:antialiased;overflow:hidden}
   #stage{height:100vh;display:flex;flex-direction:column;padding:2.2vh 3vw 1.6vh}
 
-  /* Header: brand row on top, tab strip below. The strip WRAPS — with 18 slides a
+  /* Header: brand row on top, tab strip below. The strip WRAPS — with 24 slides a
      single row overflows the screen and clips the last tabs. */
   .bar{display:flex;flex-direction:column;gap:1vh;
     padding-bottom:1.1vh;border-bottom:1px solid var(--line);flex-shrink:0}
   .barrow{display:flex;justify-content:space-between;align-items:center;gap:1.5vw}
   .brand{font-size:1.5vh;letter-spacing:.22em;text-transform:uppercase;color:var(--faint);font-weight:800}
   .brand b{color:var(--gold)}
+  /* The lockup is too detailed to survive the header strip, so it lives on the
+     welcome slide at a size where the program line is actually readable. */
+  .temlock{margin-bottom:2vh}
+  .temlock img{display:block;width:34vh;max-width:100%;height:auto}
+
   .nav{display:flex;gap:.45vw;align-items:center;flex-wrap:wrap;row-gap:.7vh}
   .nb{background:var(--bg2);border:1px solid var(--line);color:var(--dim);
     border-radius:.8vh;padding:.7vh 1vw;font-size:1.4vh;font-weight:700;cursor:pointer;
     font-family:inherit;white-space:nowrap;flex-shrink:0}
   .nb:hover{border-color:var(--gold);color:var(--ink)}
   .nb.on{background:var(--gold);color:#20160A;border-color:var(--gold)}
+  .nb.plan{border-style:dashed}
+  .nb.plan.on{background:var(--maroon);color:#fff;border-color:var(--maroon);border-style:solid}
   /* Prev / next / position — for driving the deck with a mouse */
   .pager{display:flex;align-items:center;gap:.7vw;flex-shrink:0}
   .pager button{background:var(--bg2);border:1px solid var(--line);color:var(--ink);
@@ -134,12 +141,19 @@
   .openbtn{background:var(--gold);color:#20160A;border:0;border-radius:1.1vh;
     padding:1.6vh 2.2vw;font-size:2.2vh;font-weight:800;cursor:pointer;font-family:inherit;width:100%}
   .openbtn:hover{filter:brightness(1.06)}
+  .openbtn.plan{background:var(--maroon);color:#fff}
   .openbtn.done{background:var(--bg2);color:var(--low);border:1px solid rgba(61,214,140,.4);cursor:default}
+  .openbtn[disabled]{background:var(--bg2);color:var(--faint);border:1px solid var(--line);cursor:not-allowed}
   .lockcount{font-size:2vh;color:var(--dim);text-align:center;margin-top:1.4vh}
   .lockcount b{color:var(--gold);font-size:2.8vh;font-variant-numeric:tabular-nums}
   .lockbar{height:.9vh;border-radius:.5vh;background:var(--bg2);margin-top:1.2vh;overflow:hidden}
   .lockbar>i{display:block;height:100%;background:var(--low);transition:width .5s}
   .srcnote{font-size:1.4vh;color:var(--faint);text-align:center;margin-top:1.2vh}
+  .steps{display:flex;gap:.6vw;margin-bottom:1.6vh}
+  .steps span{flex:1;text-align:center;font-size:1.4vh;font-weight:800;letter-spacing:.1em;
+    text-transform:uppercase;padding:.8vh .4vw;border-radius:.8vh;background:var(--bg2);color:var(--faint)}
+  .steps span.on{background:var(--maroon);color:#fff}
+  .steps span.on2{background:var(--gold);color:#20160A}
 </style>
 </head>
 <body>
@@ -169,24 +183,59 @@
 (function(){
   'use strict';
   const G = window.LaunchWindow;
+
+  /* engine.js holds every scenario and all the math; without it there is no deck
+     to draw. A missing sync.js degrades to solo mode, but this one is fatal — so
+     say which file is missing instead of throwing into a blank screen in front of
+     a class. */
+  if(!G || !G.ROUNDS){
+    document.body.innerHTML =
+      '<div style="max-width:760px;margin:12vh auto;padding:0 6vw;font:400 17px/1.6 ' +
+      '-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#EEF2FF">' +
+      '<div style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#FFC627;' +
+      'font-weight:800;margin-bottom:14px">Launch Window</div>' +
+      '<h1 style="font-size:30px;margin:0 0 16px;letter-spacing:-.02em">engine.js did not load.</h1>' +
+      '<p style="color:#95A1C8">This page needs four files sitting next to it in the same folder:' +
+      '<br><b style="color:#EEF2FF">engine.js</b>, <b style="color:#EEF2FF">sync.js</b>, ' +
+      '<b style="color:#EEF2FF">firebase-config.js</b> and <b style="color:#EEF2FF">index.html</b>.</p>' +
+      '<p style="color:#95A1C8">Two things to check, in order:</p>' +
+      '<ol style="color:#95A1C8"><li>Is <b style="color:#EEF2FF">engine.js</b> actually in the same ' +
+      'folder as this file? Opening host.html on its own from a Downloads folder is the usual cause.</li>' +
+      '<li>Is it spelled <b style="color:#EEF2FF">engine.js</b>, all lowercase? Web hosts are ' +
+      'case-sensitive even when your laptop is not.</li></ol>' +
+      '<p style="color:#63709B;font-size:14px">Nothing is wrong with the game. Put the files together ' +
+      'and reload.</p></div>';
+    return;
+  }
+
   // Inert stub if sync.js is missing — the deck must never fail to open in class.
   const Sync = window.LWSync || {
     enabled:false, status:'off', code:null,
     init:async()=>false, onStatus(cb){ cb('off'); }, teardown(){},
-    createRoom:async()=>null, setOpenRound(){}, onPlayers(){}, onVotes(){}, endSession:async()=>{}
+    readGates:()=>({plan:0,decide:0}),
+    createRoom:async()=>null, setOpenRound(){}, setGates(){}, onPlayers(){}, onVotes(){}, endSession:async()=>{}
   };
   const body = document.getElementById('body');
   const nav  = document.getElementById('nav');
   const hint = document.getElementById('hint');
   const esc = s => String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
+  // Official ASU Fulton Schools / TEM lockup, embedded so the deck stays a
+  // single file with nothing extra to upload.
+  const ASU_DARK = 'data:image/png;base64,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';
+  const LOCKUP = `<div class="temlock"><img src="${ASU_DARK}" alt="ASU Ira A. Fulton Schools of Engineering — Technology Entrepreneurship and Management"></div>`;
+
   // ---------- slide deck ----------
+  // Each quarter is now TWO slides: planning, then the decision. The teacher opens
+  // one gate per slide, so "allocate your weeks" and "here is the dilemma" are
+  // separate moments for the room instead of one blurred one.
   const slides = [];
   slides.push({id:'welcome', label:'Start', render:renderWelcome});
   slides.push({id:'rules',   label:'Rules', render:renderRules});
   G.ROUNDS.forEach(R => {
-    slides.push({id:'q'+R.n,      label:R.quarter,        render:()=>renderRound(R)});
-    slides.push({id:'poll'+R.n,   label:R.quarter+' poll', render:()=>renderPoll(R), hidden:true});
+    slides.push({id:'plan'+R.n, label:R.quarter+' plan', plan:true, render:()=>renderPlan(R)});
+    slides.push({id:'q'+R.n,    label:R.quarter,          render:()=>renderRound(R)});
+    slides.push({id:'poll'+R.n, label:R.quarter+' poll',  render:()=>renderPoll(R), hidden:true});
     if(R.n===4) slides.push({id:'rev4', label:'FDA',       render:()=>renderReveal('regulatory')});
     if(R.n===6) slides.push({id:'rev6', label:'Reckoning', render:()=>renderReveal('reckoning')});
   });
@@ -205,7 +254,8 @@
   let players = [];                // live roster from Firebase
   const liveVotes = {};            // liveVotes[round] = {A,B,C}
   G.ROUNDS.forEach(R => liveVotes[R.n] = {A:0,B:0,C:0});
-  let openRound = 0;               // highest quarter released to students
+  let openPlan = 0;                // highest quarter whose planning is released
+  let openDecide = 0;              // highest quarter whose decision is released
 
   // Displayed counts are live votes PLUS manual tallies, so a student whose phone
   // failed can still be counted with a hand raise.
@@ -227,10 +277,27 @@
     return '<span class="badge lost"><i></i>Reconnecting</span>';
   }
 
-  // Re-render the current slide when live data changes, but only if it shows any.
+  /* Re-render the current slide when live data changes — but ONLY when the numbers
+     on screen actually changed. With 70 phones reporting in, Firebase fires a
+     callback per student per write; repainting on every one of those tore the
+     "Open" button out from under the teacher's click and stole focus from the
+     leaderboard entry boxes mid-typing. */
+  let lastSig = '';
+  let liveRefresh = false;      // true while repainting from live data, not navigation
+  function liveSignature(){
+    return (slides[cur] && slides[cur].id) + '|' + Sync.status + '|' + players.length + '|' +
+      players.map(p => p.pid+':'+p.round+':'+p.score+':'+(p.done?1:0)).sort().join(',') + '|' +
+      G.ROUNDS.map(R => { const v = liveVotes[R.n] || {A:0,B:0,C:0}; return v.A+'/'+v.B+'/'+v.C; }).join(',');
+  }
   function refreshIfLiveSlide(){
+    const sig = liveSignature();
+    if(sig === lastSig) return;
+    lastSig = sig;
     const id = slides[cur] && slides[cur].id;
-    if(/^(poll\d|lb|welcome|q\d)$/.test(id)) slides[cur].render();
+    if(/^(plan\d|poll\d|lb|welcome|q\d)$/.test(id)){
+      liveRefresh = true;
+      try{ slides[cur].render(); } finally { liveRefresh = false; }
+    }
     const p = document.getElementById('livebadge');
     if(p) p.innerHTML = liveBadge();
   }
@@ -247,14 +314,23 @@
     refreshIfLiveSlide();
   }
 
-  async function openQuarter(n){
-    openRound = Math.max(openRound, n);
-    await Sync.setOpenRound(openRound);
+  // The two gates. Planning never goes backwards, and opening a decision implies
+  // its planning is open too — so a mis-click can't lock the room out of a step.
+  async function openPlanning(n){
+    openPlan = Math.max(openPlan, n);
+    await Sync.setGates(openPlan, openDecide);
+    refreshIfLiveSlide();
+  }
+  async function openDecision(n){
+    openDecide = Math.max(openDecide, n);
+    openPlan = Math.max(openPlan, n);
+    await Sync.setGates(openPlan, openDecide);
     refreshIfLiveSlide();
   }
 
   // ---------- timer ----------
   let tRemain = 180, tRunning = false, tId = null;
+  const planTimerSet = {};      // quarters whose planning clock we've pre-set once
   function tick(){
     if(tRemain > 0) tRemain--;
     else { stopTimer(); }
@@ -277,7 +353,7 @@
   // ---------- render helpers ----------
   function paintNav(){
     nav.innerHTML = slides.map((s,i) =>
-      `<button class="nb ${i===cur?'on':''}" data-i="${i}">${esc(s.label)}</button>`).join('');
+      `<button class="nb ${s.plan?'plan ':''}${i===cur?'on':''}" data-i="${i}">${esc(s.label)}</button>`).join('');
     nav.querySelectorAll('[data-i]').forEach(b => b.onclick = () => go(+b.dataset.i));
     const pos = document.getElementById('pos');
     if(pos) pos.textContent = (cur+1) + ' / ' + slides.length;
@@ -307,7 +383,7 @@
     body.innerHTML = `<div class="qr">
       <div class="qrbox"><canvas id="qrc"></canvas></div>
       <div>
-        <div class="eyebrow">ASU · Technological Entrepreneurship &amp; Management</div>
+        ${LOCKUP}
         <h1>Launch Window</h1>
         ${room ? `
           <div class="roomcode">${esc(room)}</div>
@@ -337,10 +413,10 @@
   }
 
   function renderRules(){
-    hint.textContent = 'Walk this in about 90 seconds, then send them into Q1.';
+    hint.textContent = 'Walk this in about 90 seconds, then send them into Q1 planning.';
     body.innerHTML = `<div class="wide">
       <div class="eyebrow">How it works</div>
-      <h2>Six quarters. Ten engineering weeks each. One decision you cannot delegate.</h2>
+      <h2>Six quarters. Each one is a plan, then a decision.</h2>
       <div class="grid2" style="margin-top:2.4vh">
         <div class="opts">
           <div class="o"><span class="ok" style="color:var(--elev)">B</span><span>
@@ -368,29 +444,93 @@
     </div>`;
   }
 
-  // "Open Q3" releases the quarter to every phone at once. Until you press it,
-  // students who finished Q2 sit on a waiting screen — which is what keeps the
-  // room together for the Q4 reveal.
-  function renderOpenControl(R){
-    const isOpen = openRound >= R.n;
+  function stepbar(which){
+    return `<div class="steps">
+      <span class="${which==='plan'?'on':''}">1 · Plan the quarter</span>
+      <span class="${which==='decide'?'on2':''}">2 · Make the call</span>
+    </div>`;
+  }
+
+  /* PLANNING slide. "Open Q3 planning" releases the allocation screen to every
+     phone at once. Students who finished Q2 sit on a waiting screen until you
+     press it — which is what keeps the room together for the Q4 reveal. */
+  function renderPlan(R){
+    hint.textContent = 'Open planning, give them about 90 seconds to spend their ten weeks, then move to the decision.';
+    const isOpen = openPlan >= R.n;
     const locked = players.filter(p => p.round >= R.n).length;
     const total  = players.length;
     const pct    = total ? Math.round(locked / total * 100) : 0;
-    return `
-      <div class="eyebrow">Round control &nbsp;·&nbsp; <span id="livebadge">${liveBadge()}</span></div>
-      <button class="openbtn ${isOpen ? 'done' : ''}" id="${isOpen ? '' : 'openq'}">
-        ${isOpen ? '✓ ' + R.quarter + ' is open' : 'Open ' + R.quarter + ' to all phones'}
-      </button>
-      ${isOpen ? `
-        <div class="lockcount"><b>${locked}</b> of ${total} have locked in ${R.quarter}</div>
-        <div class="lockbar"><i style="width:${pct}%"></i></div>` : ''}`;
+
+    body.innerHTML = `<div class="grid2">
+      <div>
+        ${stepbar('plan')}
+        <div class="eyebrow">${R.quarter} · Step 1 · Engineering plan</div>
+        <h2>Ten engineering weeks. Where do they go?</h2>
+        <p style="font-size:2.2vh">Every quarter drifts <b style="color:var(--serious)">+4</b> on all three
+        risk meters whether you touch them or not, and building adds more on top. One week of mitigation
+        pulls a meter down <b style="color:var(--low)">7</b>.</p>
+        <div class="opts">
+          <div class="o"><span class="ok" style="color:var(--elev)">B</span><span>
+            <span class="ol" style="color:var(--elev)">BUILD</span>
+            <span class="os">Users and revenue — and more of every risk.</span></span></div>
+          <div class="o"><span class="ok" style="color:#4CC9F0">V</span><span>
+            <span class="ol" style="color:#4CC9F0">VALIDATE</span>
+            <span class="os">Lowers Safety risk.</span></span></div>
+          <div class="o"><span class="ok" style="color:#7BDFA0">P</span><span>
+            <span class="ol" style="color:#7BDFA0">PROTECT</span>
+            <span class="os">Lowers Data risk.</span></span></div>
+          <div class="o"><span class="ok" style="color:#C77DFF">A</span><span>
+            <span class="ol" style="color:#C77DFF">AUDIT</span>
+            <span class="os">Lowers Fairness risk.</span></span></div>
+        </div>
+      </div>
+      <div class="timer">
+        ${room ? `
+          <div class="eyebrow">Round control &nbsp;·&nbsp; <span id="livebadge">${liveBadge()}</span></div>
+          <button class="openbtn plan ${isOpen ? 'done' : ''}" id="${isOpen ? '' : 'openplan'}">
+            ${isOpen ? '✓ ' + R.quarter + ' planning is open' : 'Open ' + R.quarter + ' planning'}
+          </button>
+          ${isOpen ? `
+            <div class="lockcount"><b>${locked}</b> of ${total} have locked their plan</div>
+            <div class="lockbar"><i style="width:${pct}%"></i></div>
+            <div class="srcnote">Around 80% is the signal to move on. Stragglers catch up.</div>` : ''}
+        ` : '<div class="eyebrow">Manual mode — no phones to open</div>'}
+        <div class="eyebrow" style="margin-top:${room?'2.4vh':'0'}">Time remaining</div>
+        <div class="tnum" id="tnum">1:30</div>
+        <div class="tctl">
+          <button class="nb" id="tplay">Start</button>
+          <button class="nb" id="t15">1:30</button>
+          <button class="nb" id="t2">2:00</button>
+          <button class="nb" id="t1">1:00</button>
+        </div>
+      </div>
+    </div>`;
+    // Planning is a shorter beat than the decision — default to 90s the first
+    // time this quarter's planning slide comes up, but never stomp a running clock.
+    if(!tRunning && !planTimerSet[R.n]){ planTimerSet[R.n] = 1; tRemain = 90; }
+    const t15 = document.getElementById('t15');
+    if(t15) t15.onclick = ()=>setTimer(90);
+    const ob = document.getElementById('openplan');
+    if(ob) ob.onclick = () => openPlanning(R.n);
+    document.getElementById('tplay').onclick = toggleTimer;
+    document.getElementById('t2').onclick = ()=>setTimer(120);
+    document.getElementById('t1').onclick = ()=>setTimer(60);
+    paintTimer();
   }
 
   function renderRound(R){
-    hint.textContent = `Read the scenario aloud. Give them ${R.n===1?'4':'3'} minutes, then take the poll.`;
+    hint.textContent = 'Read the scenario aloud, open the decision, then take the poll.';
+    const isOpen = openDecide >= R.n;
+    const planOpenHere = openPlan >= R.n;
+    const v = liveVotes[R.n] || {A:0,B:0,C:0};
+    const voted = v.A + v.B + v.C;
+    const total = players.length;
+    const pct = total ? Math.round(voted / total * 100) : 0;
+
     body.innerHTML = `<div class="grid2">
       <div>
-        <div class="eyebrow">${R.quarter} · Decision ${R.n} of 6</div>
+        ${stepbar('decide')}
+        <div class="eyebrow">${R.quarter} · Step 2 · Decision ${R.n} of 6</div>
         <h2>${esc(R.title)}</h2>
         <p style="font-size:2.35vh">${esc(R.brief)}</p>
         <p style="font-size:2.6vh;font-weight:800;color:var(--gold)">${esc(R.question)}</p>
@@ -400,7 +540,17 @@
         </div>
       </div>
       <div class="timer">
-        ${room ? renderOpenControl(R) : ''}
+        ${room ? `
+          <div class="eyebrow">Round control &nbsp;·&nbsp; <span id="livebadge">${liveBadge()}</span></div>
+          <button class="openbtn ${isOpen ? 'done' : ''}" id="${isOpen ? '' : 'opendec'}"
+            ${planOpenHere ? '' : 'disabled'}>
+            ${isOpen ? '✓ ' + R.quarter + ' decision is open'
+                     : (planOpenHere ? 'Open ' + R.quarter + ' decision' : 'Open planning first')}
+          </button>
+          ${isOpen ? `
+            <div class="lockcount"><b>${voted}</b> of ${total} have chosen</div>
+            <div class="lockbar"><i style="width:${pct}%"></i></div>` : ''}
+        ` : ''}
         <div class="eyebrow" style="margin-top:${room?'2.4vh':'0'}">Time remaining</div>
         <div class="tnum" id="tnum">3:00</div>
         <div class="tctl">
@@ -413,8 +563,8 @@
           <b style="color:var(--serious)">On their screens:</b> ${esc(R.warning)}</p>` : ''}
       </div>
     </div>`;
-    const ob = document.getElementById('openq');
-    if(ob) ob.onclick = () => openQuarter(R.n);
+    const ob = document.getElementById('opendec');
+    if(ob) ob.onclick = () => openDecision(R.n);
     document.getElementById('tplay').onclick = toggleTimer;
     document.getElementById('t3').onclick = ()=>setTimer(180);
     document.getElementById('t2').onclick = ()=>setTimer(120);
@@ -541,7 +691,9 @@
     document.getElementById('e-go').onclick = add;
     document.getElementById('e-undo').onclick = () => { scores.pop(); renderLeaderboard(); };
     [nm,tm,sc].forEach(el => el.addEventListener('keydown', e => { if(e.key==='Enter') add(); }));
-    nm.focus();
+    // Don't yank the caret back while a student helper is typing and scores are
+    // still landing from phones.
+    if(!liveRefresh) nm.focus();
   }
 
   function renderDebrief(){
@@ -569,7 +721,9 @@
           and the six dilemmas are <b>responsible technology development</b>.</p>
           <p style="color:var(--gold);font-size:2.4vh;font-weight:800">
           Four years of this. Then you do it with real money.</p>
-          ${room ? `<div style="margin-top:3vh">
+          <p class="dim" style="font-size:1.9vh">There is an <b>Explore the TEM program</b> button on their
+          certificate screen. Tell them it is there.</p>
+          ${room ? `<div style="margin-top:2.4vh">
             <button class="nb" id="endsess" style="border-color:var(--critical);color:var(--critical)">
               End session &amp; delete room ${esc(room)}</button>
             <p class="dim" style="font-size:1.6vh;margin-top:1vh">
@@ -582,7 +736,7 @@
     if(es) es.onclick = async () => {
       if(!confirm('Delete room ' + room + ' and all student records? Certificates already saved on phones are unaffected.')) return;
       await Sync.endSession();
-      room = null; players = []; openRound = 0;
+      room = null; players = []; openPlan = 0; openDecide = 0;
       renderDebrief();
     };
   }
